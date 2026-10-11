@@ -1,5 +1,8 @@
-bin/
+/bin/
+/dist/
 coverage.out
-node_modules/
-web/dist/
 .DS_Store
+node_modules/
+# Built UI; the placeholder keeps `go build` working before the first web build.
+web/dist/*
+!web/dist/.gitkeep

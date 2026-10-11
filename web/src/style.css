@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter var", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --color-accent-50: oklch(0.98 0.02 185);
+  --color-accent-100: oklch(0.95 0.05 185);
+  --color-accent-500: oklch(0.65 0.12 185);
+  --color-accent-600: oklch(0.56 0.11 185);
+  --color-accent-700: oklch(0.48 0.09 185);
+}
+
+@layer base {
+  html {
+    color-scheme: light dark;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    @apply bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-accent-500;
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}

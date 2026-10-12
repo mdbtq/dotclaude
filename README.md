@@ -96,3 +96,7 @@ never against a real one.
 [Agents Studio](https://github.com/davidrodriguezpozo/agents-ui) runs and lands
 agent work and has a library of agents, skills and plugins. dotclaude focuses
 on what is in effect where and on what is wrong with it.
+
+## Licence
+
+MIT.

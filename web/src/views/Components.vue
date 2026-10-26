@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { Component, Kind } from '../types'
+import type { Component, FixRequest, Kind } from '../types'
 import { relativeTime, useConfig } from '../store'
 import PageHeader from '../components/PageHeader.vue'
 import SearchInput from '../components/SearchInput.vue'
@@ -10,6 +10,7 @@ import StatusDot from '../components/StatusDot.vue'
 import Drawer from '../components/Drawer.vue'
 import Field from '../components/Field.vue'
 import Empty from '../components/Empty.vue'
+import FixButton from '../components/FixButton.vue'
 
 const props = defineProps<{ kind: Kind }>()
 const { config, findings } = useConfig()
@@ -63,6 +64,16 @@ const selectedFindings = computed(() => findings.value.filter((f) => selected.va
 const frontmatter = computed(() =>
   Object.entries(selected.value?.frontmatter ?? {}).filter(([k]) => k !== 'name' && k !== 'description'),
 )
+
+// Skills and commands can be switched off for every project, or back on when
+// skillOverrides is what switched them off.
+const toggle = computed<FixRequest | null>(() => {
+  const c = selected.value
+  if (!c || c.kind === 'agent' || c.error) return null
+  if (c.status === 'active') return { kind: 'skill-override', target: c.name, value: 'off', label: 'Switch off everywhere' }
+  if (c.status === 'disabled' && c.statusNote?.includes('skillOverrides')) return { kind: 'skill-override', target: c.name, value: 'on', label: 'Switch back on' }
+  return null
+})
 
 function show(v: unknown) {
   return typeof v === 'string' ? v : JSON.stringify(v)
@@ -130,6 +141,7 @@ function show(v: unknown) {
         <div v-if="selected.statusNote" class="mt-0.5 text-xs text-zinc-500">{{ selected.statusNote }}</div>
       </Field>
       <Field label="Source"><ScopeBadge :source="selected.source" /></Field>
+      <Field v-if="toggle" label="Change"><FixButton :fix="toggle" /></Field>
       <Field v-if="selected.description" label="Description">{{ selected.description }}</Field>
       <Field v-if="selected.usage" label="Used">{{ selected.usage.count }} times, last {{ relativeTime(selected.usage.lastUsed) }}</Field>
       <Field v-for="[k, v] in frontmatter" :key="k" :label="k"><span class="font-mono text-xs">{{ show(v) }}</span></Field>

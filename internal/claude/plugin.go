@@ -25,7 +25,9 @@ type Plugin struct {
 	Installed   bool      `json:"installed"`
 	Enabled     bool      `json:"enabled"`
 	// EnabledBy is the settings layer that decided Enabled.
-	EnabledBy Scope          `json:"enabledBy,omitempty"`
+	EnabledBy Scope `json:"enabledBy,omitempty"`
+	// EnabledIn is the settings file that decided Enabled.
+	EnabledIn string         `json:"enabledIn,omitempty"`
 	Usage     *Usage         `json:"usage,omitempty"`
 	Counts    map[string]int `json:"counts"`
 	Error     string         `json:"error,omitempty"`

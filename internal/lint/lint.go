@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/mdbtq/dotclaude/internal/claude"
+	"github.com/mdbtq/dotclaude/internal/fix"
 )
 
 // Severity orders findings by how much they matter.
@@ -31,6 +32,8 @@ type Finding struct {
 	Line     int      `json:"line,omitempty"`
 	// Related is a second file involved, e.g. the other half of an overlap.
 	Related string `json:"related,omitempty"`
+	// Fix is a change that resolves the finding, when there is one.
+	Fix *fix.Request `json:"fix,omitempty"`
 }
 
 // Rule describes a check, for documentation and the UI.
@@ -104,7 +107,11 @@ func components(c *claude.Config, opt Options) []Finding {
 	for _, comp := range c.Components {
 		label := fmt.Sprintf("%s %q", comp.Kind, comp.Name)
 		if comp.Error != "" {
-			out = append(out, Finding{Rule: "component/unreadable", Severity: Error, Path: comp.Path, Message: fmt.Sprintf("%s: %s", label, comp.Error)})
+			f := Finding{Rule: "component/unreadable", Severity: Error, Path: comp.Path, Message: fmt.Sprintf("%s: %s", label, comp.Error)}
+			if comp.Kind == claude.KindSkill && strings.HasPrefix(comp.Error, "dangling symlink") {
+				f.Fix = &fix.Request{Kind: fix.RemoveSymlink, Target: comp.Path, Label: "Remove the symlink"}
+			}
+			out = append(out, f)
 			continue
 		}
 		if comp.FrontmatterError != "" {
@@ -122,7 +129,10 @@ func components(c *claude.Config, opt Options) []Finding {
 		if comp.Kind == claude.KindSkill && comp.Status == claude.StatusActive {
 			skills = append(skills, comp)
 			if comp.Usage == nil && comp.Source.Scope != claude.ScopePlugin {
-				out = append(out, Finding{Rule: "skill/never-used", Severity: Info, Path: comp.Path, Message: label + " has no recorded use"})
+				out = append(out, Finding{
+					Rule: "skill/never-used", Severity: Info, Path: comp.Path, Message: label + " has no recorded use",
+					Fix: &fix.Request{Kind: fix.SkillOverride, Target: comp.Name, Value: "off", Label: "Switch off"},
+				})
 			}
 		}
 	}
@@ -178,7 +188,10 @@ func memory(stores []claude.MemoryStore, opt Options) []Finding {
 			for _, l := range s.Index.Links {
 				indexed[filepath.Clean(l.File)] = true
 				if !l.Exists {
-					out = append(out, Finding{Rule: "memory/index-dangling", Severity: Error, Path: s.Index.Path, Line: l.Line, Message: fmt.Sprintf("links to %s, which does not exist", l.File)})
+					out = append(out, Finding{
+						Rule: "memory/index-dangling", Severity: Error, Path: s.Index.Path, Line: l.Line, Message: fmt.Sprintf("links to %s, which does not exist", l.File),
+						Fix: &fix.Request{Kind: fix.MemoryIndexRemove, Target: s.Index.Path, Line: l.Line, Label: "Remove the line"},
+					})
 				}
 			}
 			if s.Index.Lines > 200 || s.Index.Bytes > 25*1024 {
@@ -187,7 +200,10 @@ func memory(stores []claude.MemoryStore, opt Options) []Finding {
 		}
 		for _, m := range s.Entries {
 			if s.Index != nil && !indexed[m.File] {
-				out = append(out, Finding{Rule: "memory/not-indexed", Severity: Warning, Path: m.Path, Message: fmt.Sprintf("%s is not listed in MEMORY.md", m.File)})
+				out = append(out, Finding{
+					Rule: "memory/not-indexed", Severity: Warning, Path: m.Path, Message: fmt.Sprintf("%s is not listed in MEMORY.md", m.File),
+					Fix: &fix.Request{Kind: fix.MemoryIndexAdd, Target: m.Path, Label: "Add to MEMORY.md"},
+				})
 			}
 			var missing []string
 			if m.Name == "" {
@@ -230,7 +246,11 @@ func plugins(list []claude.Plugin) []Finding {
 	var out []Finding
 	for _, p := range list {
 		if p.Enabled && p.Error != "" {
-			out = append(out, Finding{Rule: "plugin/not-installed", Severity: Error, Path: p.InstallPath, Message: fmt.Sprintf("%s: %s", p.ID, p.Error)})
+			f := Finding{Rule: "plugin/not-installed", Severity: Error, Path: p.InstallPath, Message: fmt.Sprintf("%s: %s", p.ID, p.Error)}
+			if p.EnabledBy != claude.ScopeManaged {
+				f.Fix = &fix.Request{Kind: fix.PluginEnabled, Target: p.ID, Value: "false", Label: "Disable in settings"}
+			}
+			out = append(out, f)
 		}
 	}
 	return out

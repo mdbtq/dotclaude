@@ -95,15 +95,18 @@ func Load(p Paths, projectDir string) (*Config, error) {
 	}
 
 	// Plugins.
-	enabled, enabledBy := map[string]bool{}, map[string]Scope{}
+	enabled, enabledBy, enabledIn := map[string]bool{}, map[string]Scope{}, map[string]string{}
 	for _, l := range layers {
 		obj, _ := l.Values["enabledPlugins"].(map[string]any)
 		for id, v := range obj {
 			on, _ := v.(bool)
-			enabled[id], enabledBy[id] = on, l.Scope
+			enabled[id], enabledBy[id], enabledIn[id] = on, l.Scope, l.Path
 		}
 	}
 	plugins, contents := loadPlugins(p.ConfigDir, c.Project, enabled, enabledBy, g.PluginUsage)
+	for i := range plugins {
+		plugins[i].EnabledIn = enabledIn[plugins[i].ID]
+	}
 	c.Plugins = plugins
 
 	// Components.

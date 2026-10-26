@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import type { Config, Finding, Meta } from './types'
+import type { Config, Finding, FixPlan, FixRequest, FixResult, Meta } from './types'
 
 // One shared store: the configuration and lint findings for the project in
 // the URL (?project=…), or the user-level view when there is none.
@@ -48,6 +48,37 @@ export async function fetchFile(path: string, project: string): Promise<string> 
   const res = await fetch(`/api/file?path=${encodeURIComponent(path)}${p}`)
   if (!res.ok) throw new Error((await res.text()).trim() || res.statusText)
   return res.text()
+}
+
+// Changes go through one dialog: a component asks for a fix, the dialog
+// previews it and applies it on confirmation.
+export const pendingFix = ref<{ request: FixRequest; project: string } | null>(null)
+
+export function requestFix(request: FixRequest, project: string) {
+  pendingFix.value = { request, project }
+}
+
+export const canChange = computed(() => meta.value !== null && !meta.value.readOnly)
+
+async function postJSON<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Dotclaude': '1' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error((await res.text()).trim() || res.statusText)
+  return res.json() as Promise<T>
+}
+
+export function previewFix(request: FixRequest, project: string) {
+  return postJSON<FixPlan>('/api/fix/preview', { request, project })
+}
+
+export async function applyFix(plan: FixPlan, project: string) {
+  const hashes = Object.fromEntries(plan.changes.map((c) => [c.path, c.hash]))
+  const result = await postJSON<FixResult>('/api/fix/apply', { request: plan.request, project, hashes })
+  await load(project, true)
+  return result
 }
 
 /** The configuration for the project in the current route. */

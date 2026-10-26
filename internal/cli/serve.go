@@ -16,8 +16,9 @@ import (
 
 func serveCmd(flags *pathFlags) *cobra.Command {
 	var (
-		port int
-		open bool
+		port     int
+		open     bool
+		readOnly bool
 	)
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -32,7 +33,7 @@ func serveCmd(flags *pathFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			srv := &server.Server{Paths: p, Version: cmd.Root().Version, UI: web.Dist()}
+			srv := &server.Server{Paths: p, Version: cmd.Root().Version, UI: web.Dist(), ReadOnly: readOnly}
 			url := fmt.Sprintf("http://localhost:%d", ln.Addr().(*net.TCPAddr).Port)
 			fmt.Fprintf(cmd.OutOrStdout(), "dotclaude is running at %s (ctrl+c to stop)\n", url)
 			if srv.UI == nil {
@@ -47,6 +48,7 @@ func serveCmd(flags *pathFlags) *cobra.Command {
 	}
 	cmd.Flags().IntVar(&port, "port", 7878, "port to listen on (0 picks a free one)")
 	cmd.Flags().BoolVar(&open, "open", false, "open the UI in the default browser")
+	cmd.Flags().BoolVar(&readOnly, "read-only", false, "refuse every change; the UI only shows")
 	return cmd
 }
 

@@ -5,6 +5,7 @@ import PageHeader from '../components/PageHeader.vue'
 import SearchInput from '../components/SearchInput.vue'
 import Segmented from '../components/Segmented.vue'
 import Empty from '../components/Empty.vue'
+import FixButton from '../components/FixButton.vue'
 
 const { config } = useConfig()
 const search = ref('')
@@ -61,7 +62,13 @@ const labels: Record<string, string> = { agents: 'agents', skills: 'skills', com
         </template>
         <span v-if="p.usage" class="ml-auto">used {{ p.usage.count }}× · {{ relativeTime(p.usage.lastUsed) }}</span>
       </div>
-      <div v-if="p.installPath" class="mt-2 truncate font-mono text-[11px] text-zinc-400" :title="p.installPath">{{ tilde(p.installPath) }}</div>
+      <div class="mt-2 flex items-center justify-between gap-3">
+        <span class="truncate font-mono text-[11px] text-zinc-400" :title="p.installPath">{{ tilde(p.installPath) }}</span>
+        <FixButton
+          v-if="p.enabledBy !== 'managed' && (p.enabled || p.installed)"
+          :fix="{ kind: 'plugin-enabled', target: p.id, value: p.enabled ? 'false' : 'true', label: p.enabled ? 'Disable' : 'Enable' }"
+        />
+      </div>
     </article>
   </div>
 </template>

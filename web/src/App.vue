@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { tilde, useConfig } from './store'
+import { pendingFix, tilde, useConfig } from './store'
 import ProjectPicker from './components/ProjectPicker.vue'
+import FixDialog from './components/FixDialog.vue'
 
 const { project, config, findings, loading, error, refresh } = useConfig()
 const route = useRoute()
@@ -106,6 +107,7 @@ function selectProject(p: string) {
           {{ w }}
         </div>
         <RouterView v-if="config" />
+        <FixDialog v-if="pendingFix" :key="JSON.stringify(pendingFix)" />
         <div v-else-if="loading" class="py-24 text-center text-sm text-zinc-500">Reading configuration…</div>
       </main>
     </div>

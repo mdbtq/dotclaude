@@ -7,6 +7,7 @@ import Segmented from '../components/Segmented.vue'
 import SearchInput from '../components/SearchInput.vue'
 import Drawer from '../components/Drawer.vue'
 import Empty from '../components/Empty.vue'
+import FixButton from '../components/FixButton.vue'
 
 const { findings, meta } = useConfig()
 const level = ref<'warning' | 'error' | 'info'>('warning')
@@ -55,14 +56,15 @@ const count = (s: Severity) => findings.value.filter((f) => f.severity === s).le
     </h2>
     <p v-if="describe(rule)" class="mt-0.5 mb-2 ml-4 text-xs text-zinc-500">{{ describe(rule) }}</p>
     <ul class="divide-y divide-zinc-100 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
-      <li v-for="(f, i) in list" :key="i">
-        <button class="w-full px-4 py-2 text-left text-sm hover:bg-zinc-50 disabled:cursor-default dark:hover:bg-zinc-800/50" :disabled="!f.path?.endsWith('.md')" @click="open = f.path ?? null">
+      <li v-for="(f, i) in list" :key="i" class="flex items-center gap-3 pr-4">
+        <button class="min-w-0 flex-1 px-4 py-2 text-left text-sm hover:bg-zinc-50 disabled:cursor-default dark:hover:bg-zinc-800/50" :disabled="!f.path?.endsWith('.md')" @click="open = f.path ?? null">
           <div>{{ f.message }}</div>
           <div v-if="f.path" class="truncate font-mono text-[11px] text-zinc-400">
             {{ tilde(f.path) }}<template v-if="f.line">:{{ f.line }}</template>
             <template v-if="f.related"> ↔ {{ tilde(f.related) }}</template>
           </div>
         </button>
+        <FixButton v-if="f.fix" :fix="f.fix" />
       </li>
     </ul>
   </section>

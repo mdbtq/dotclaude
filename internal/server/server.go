@@ -3,13 +3,17 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/mdbtq/dotclaude/internal/claude"
+	"github.com/mdbtq/dotclaude/internal/fix"
 	"github.com/mdbtq/dotclaude/internal/lint"
 )
 
@@ -24,6 +28,8 @@ type Server struct {
 	Version string
 	// UI holds the built web app; nil serves a notice instead.
 	UI fs.FS
+	// ReadOnly refuses every change.
+	ReadOnly bool
 }
 
 // Handler returns the HTTP handler.
@@ -33,6 +39,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/config", s.config)
 	mux.HandleFunc("GET /api/lint", s.lint)
 	mux.HandleFunc("GET /api/file", s.file)
+	mux.Handle("POST /api/fix/preview", s.writeGuard(http.HandlerFunc(s.fixPreview)))
+	mux.Handle("POST /api/fix/apply", s.writeGuard(http.HandlerFunc(s.fixApply)))
 	mux.Handle("/", s.ui())
 	return localOnly(mux)
 }
@@ -45,6 +53,7 @@ func (s *Server) meta(w http.ResponseWriter, _ *http.Request) {
 		"managedDir":   s.Paths.ManagedDir,
 		"memoryDirs":   s.Paths.MemoryDirs,
 		"home":         s.Paths.Home,
+		"readOnly":     s.ReadOnly,
 		"rules":        lint.Rules,
 	})
 }
@@ -132,6 +141,108 @@ func allowedFiles(c *claude.Config) map[string]bool {
 	return allowed
 }
 
+type fixBody struct {
+	Project string            `json:"project"`
+	Request fix.Request       `json:"request"`
+	Hashes  map[string]string `json:"hashes"`
+}
+
+// prepareFix re-derives the plan from the configuration as it is now, so the
+// client only names a change and never supplies a path to write to.
+func (s *Server) prepareFix(w http.ResponseWriter, r *http.Request) (*fix.Plan, fixBody, bool) {
+	var body fixBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&body); err != nil {
+		http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
+		return nil, body, false
+	}
+	c, err := claude.Load(s.Paths, body.Project)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return nil, body, false
+	}
+	if !s.knownProject(c) {
+		http.Error(w, "changes are only made for the user level or a project Claude Code has been started in", http.StatusForbidden)
+		return nil, body, false
+	}
+	plan, err := fix.Prepare(c, s.Paths, body.Request)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, fix.ErrNotApplicable) {
+			status = http.StatusConflict
+		}
+		http.Error(w, err.Error(), status)
+		return nil, body, false
+	}
+	return plan, body, true
+}
+
+// knownProject limits changes to the user level and to projects listed in
+// the global config, so a request cannot point the editor at an arbitrary
+// directory's .claude.
+func (s *Server) knownProject(c *claude.Config) bool {
+	if c.Project == "" {
+		return true
+	}
+	for _, p := range c.Projects {
+		if p.Path == c.Project {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Server) fixPreview(w http.ResponseWriter, r *http.Request) {
+	if plan, _, ok := s.prepareFix(w, r); ok {
+		writeJSON(w, plan)
+	}
+}
+
+func (s *Server) fixApply(w http.ResponseWriter, r *http.Request) {
+	plan, body, ok := s.prepareFix(w, r)
+	if !ok {
+		return
+	}
+	res, err := fix.Apply(plan, body.Hashes, filepath.Join(s.Paths.ConfigDir, "backups", "dotclaude"))
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, fix.ErrChanged) {
+			status = http.StatusConflict
+		}
+		http.Error(w, err.Error(), status)
+		return
+	}
+	writeJSON(w, res)
+}
+
+// writeGuard admits a change only from the UI itself. A web page on another
+// site can make the browser send a plain form POST to localhost, but it
+// cannot add a custom header or a JSON content type without a CORS preflight,
+// which this server never answers; its Origin header would give it away too.
+func (s *Server) writeGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.ReadOnly {
+			http.Error(w, "dotclaude runs read-only", http.StatusForbidden)
+			return
+		}
+		if r.Header.Get("X-Dotclaude") != "1" || !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+			http.Error(w, "changes are only accepted from the dotclaude UI", http.StatusForbidden)
+			return
+		}
+		if origin := r.Header.Get("Origin"); origin != "" {
+			u, err := url.Parse(origin)
+			if err != nil || !loopback(u.Hostname()) {
+				http.Error(w, "changes are only accepted from the dotclaude UI", http.StatusForbidden)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func loopback(host string) bool {
+	return host == "localhost" || host == "127.0.0.1" || host == "::1"
+}
+
 func (s *Server) ui() http.Handler {
 	if s.UI == nil {
 		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -159,12 +270,11 @@ func localOnly(next http.Handler) http.Handler {
 		if h, _, err := net.SplitHostPort(host); err == nil {
 			host = h
 		}
-		switch host {
-		case "localhost", "127.0.0.1", "::1":
-			next.ServeHTTP(w, r)
-		default:
+		if !loopback(host) {
 			http.Error(w, "dotclaude only answers on localhost", http.StatusForbidden)
+			return
 		}
+		next.ServeHTTP(w, r)
 	})
 }
 

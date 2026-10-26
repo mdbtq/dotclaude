@@ -3,8 +3,11 @@
 package testfixture
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mdbtq/dotclaude/internal/claude"
@@ -93,6 +96,9 @@ func New(t *testing.T) Fixture {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
 		}
+		if strings.HasSuffix(rel, ".json") {
+			content = claudeFormat(t, content)
+		}
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -104,6 +110,17 @@ func New(t *testing.T) Fixture {
 	p := claude.DefaultPaths(home, "")
 	p.ManagedDir = filepath.Join(home, "managed") // never the real one
 	return Fixture{Home: home, Paths: p, Repo: repo, Project: project}
+}
+
+// claudeFormat lays out JSON the way Claude Code writes its files: two-space
+// indentation and a trailing newline.
+func claudeFormat(t *testing.T, content string) string {
+	t.Helper()
+	var out bytes.Buffer
+	if err := json.Indent(&out, []byte(content), "", "  "); err != nil {
+		t.Fatalf("fixture JSON: %v", err)
+	}
+	return out.String() + "\n"
 }
 
 func pluginRel(home, plugin, rel string) string {

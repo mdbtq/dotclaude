@@ -43,6 +43,7 @@ export interface Plugin {
   installed: boolean
   enabled: boolean
   enabledBy?: Scope
+  enabledIn?: string
   usage?: Usage
   counts: Record<string, number>
   error?: string
@@ -146,6 +147,25 @@ export interface Config {
   warnings?: string[]
 }
 
+export interface FixRequest {
+  kind: 'skill-override' | 'plugin-enabled' | 'memory-index-add' | 'memory-index-remove' | 'remove-symlink'
+  target: string
+  value?: string
+  line?: number
+  label?: string
+}
+
+export interface FixPlan {
+  request: FixRequest
+  title: string
+  changes: { path: string; op: 'write' | 'remove'; diff: string; hash: string }[]
+}
+
+export interface FixResult {
+  changed: string[]
+  backups: string[] | null
+}
+
 export interface Finding {
   rule: string
   severity: Severity
@@ -153,6 +173,7 @@ export interface Finding {
   path?: string
   line?: number
   related?: string
+  fix?: FixRequest
 }
 
 export interface Rule {
@@ -168,5 +189,6 @@ export interface Meta {
   managedDir: string
   memoryDirs: string[] | null
   home: string
+  readOnly: boolean
   rules: Rule[]
 }

@@ -18,7 +18,7 @@ func apply(t *testing.T, f testfixture.Fixture, r fix.Request) (*fix.Plan, fix.R
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := fix.Prepare(c, f.Paths, r)
+	plan, err := fix.Prepare(c, f.Paths, []fix.Request{r})
 	if err != nil {
 		t.Fatalf("prepare %+v: %v", r, err)
 	}
@@ -97,7 +97,7 @@ func TestPluginEnabled(t *testing.T) {
 		}
 	}
 	c := reload(t, f)
-	if _, err := fix.Prepare(c, f.Paths, fix.Request{Kind: fix.PluginEnabled, Target: "ghost@market", Value: "true"}); !errors.Is(err, fix.ErrNotApplicable) {
+	if _, err := fix.Prepare(c, f.Paths, []fix.Request{fix.Request{Kind: fix.PluginEnabled, Target: "ghost@market", Value: "true"}}); !errors.Is(err, fix.ErrNotApplicable) {
 		t.Errorf("enabling an uninstalled plugin: %v, want not applicable", err)
 	}
 }
@@ -118,7 +118,7 @@ func TestMemoryIndex(t *testing.T) {
 
 	// Done twice, it no longer applies.
 	c := reload(t, f)
-	if _, err := fix.Prepare(c, f.Paths, fix.Request{Kind: fix.MemoryIndexAdd, Target: filepath.Join(mem, "beta.md")}); !errors.Is(err, fix.ErrNotApplicable) {
+	if _, err := fix.Prepare(c, f.Paths, []fix.Request{fix.Request{Kind: fix.MemoryIndexAdd, Target: filepath.Join(mem, "beta.md")}}); !errors.Is(err, fix.ErrNotApplicable) {
 		t.Errorf("indexing beta again: %v", err)
 	}
 }
@@ -137,7 +137,7 @@ func TestRemoveSymlink(t *testing.T) {
 	// A path that is not a dangling skill is refused.
 	c := reload(t, f)
 	settings := filepath.Join(f.Home, ".claude", "settings.json")
-	if _, err := fix.Prepare(c, f.Paths, fix.Request{Kind: fix.RemoveSymlink, Target: settings}); !errors.Is(err, fix.ErrNotApplicable) {
+	if _, err := fix.Prepare(c, f.Paths, []fix.Request{fix.Request{Kind: fix.RemoveSymlink, Target: settings}}); !errors.Is(err, fix.ErrNotApplicable) {
 		t.Errorf("removing settings.json: %v, want not applicable", err)
 	}
 }
@@ -145,7 +145,7 @@ func TestRemoveSymlink(t *testing.T) {
 func TestApplyRefusesChangedFile(t *testing.T) {
 	f := testfixture.New(t)
 	c := reload(t, f)
-	plan, err := fix.Prepare(c, f.Paths, fix.Request{Kind: fix.PluginEnabled, Target: "ghost@market", Value: "false"})
+	plan, err := fix.Prepare(c, f.Paths, []fix.Request{fix.Request{Kind: fix.PluginEnabled, Target: "ghost@market", Value: "false"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestApplyRefusesChangedFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	c = reload(t, f)
-	fresh, err := fix.Prepare(c, f.Paths, plan.Request)
+	fresh, err := fix.Prepare(c, f.Paths, plan.Requests)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func TestApplyRefusesChangedFile(t *testing.T) {
 
 func TestDiffReplacement(t *testing.T) {
 	f := testfixture.New(t)
-	plan, err := fix.Prepare(reload(t, f), f.Paths, fix.Request{Kind: fix.PluginEnabled, Target: "ghost@market", Value: "false"})
+	plan, err := fix.Prepare(reload(t, f), f.Paths, []fix.Request{fix.Request{Kind: fix.PluginEnabled, Target: "ghost@market", Value: "false"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestDiffReplacement(t *testing.T) {
 
 func TestDiff(t *testing.T) {
 	f := testfixture.New(t)
-	plan, err := fix.Prepare(reload(t, f), f.Paths, fix.Request{Kind: fix.MemoryIndexRemove, Target: filepath.Join(f.Home, ".claude", "memory", "MEMORY.md"), Line: 4})
+	plan, err := fix.Prepare(reload(t, f), f.Paths, []fix.Request{fix.Request{Kind: fix.MemoryIndexRemove, Target: filepath.Join(f.Home, ".claude", "memory", "MEMORY.md"), Line: 4}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func TestRefusesRiskyEdits(t *testing.T) {
 	if err := os.WriteFile(index, []byte("# Memory\n\n- [Alpha](alpha.md), see also [Gone](gone.md)\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fix.Prepare(reload(t, f), f.Paths, fix.Request{Kind: fix.MemoryIndexRemove, Target: index, Line: 3}); !errors.Is(err, fix.ErrNotApplicable) {
+	if _, err := fix.Prepare(reload(t, f), f.Paths, []fix.Request{fix.Request{Kind: fix.MemoryIndexRemove, Target: index, Line: 3}}); !errors.Is(err, fix.ErrNotApplicable) {
 		t.Errorf("removing a line that also holds a valid link: %v, want not applicable", err)
 	}
 
@@ -203,7 +203,52 @@ func TestRefusesRiskyEdits(t *testing.T) {
 	if err := os.Symlink(filepath.Join(f.Home, "dotfiles", "settings.local.json"), local); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fix.Prepare(reload(t, f), f.Paths, fix.Request{Kind: fix.SkillOverride, Target: "release", Value: "off"}); !errors.Is(err, fix.ErrNotApplicable) {
+	if _, err := fix.Prepare(reload(t, f), f.Paths, []fix.Request{fix.Request{Kind: fix.SkillOverride, Target: "release", Value: "off"}}); !errors.Is(err, fix.ErrNotApplicable) {
 		t.Errorf("writing through a dangling symlink: %v, want not applicable", err)
+	}
+}
+
+func TestBatch(t *testing.T) {
+	f := testfixture.New(t)
+	mem := filepath.Join(f.Home, ".claude", "memory")
+	index := filepath.Join(mem, "MEMORY.md")
+	if err := os.WriteFile(index, []byte("# Memory\n\n- [Gone](gone.md) — one\n- [Alpha](alpha.md) — first\n- [Lost](lost.md) — two\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	off := func(name string) fix.Request { return fix.Request{Kind: fix.SkillOverride, Target: name, Value: "off"} }
+	requests := []fix.Request{
+		off("release"),
+		{Kind: fix.MemoryIndexRemove, Target: index, Line: 3},
+		off("deploy"),
+		off("release"), // a repeat applies once
+		{Kind: fix.MemoryIndexRemove, Target: index, Line: 5},
+		{Kind: fix.MemoryIndexAdd, Target: filepath.Join(mem, "beta.md")},
+		{Kind: fix.SkillOverride, Target: "quiet", Value: "off"}, // already off: skipped
+	}
+	plan, err := fix.Prepare(reload(t, f), f.Paths, requests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Changes) != 2 || len(plan.Skipped) != 1 || plan.Title != "5 changes in 2 files" {
+		t.Fatalf("plan: %q, %d changes, skipped %+v", plan.Title, len(plan.Changes), plan.Skipped)
+	}
+	res, err := fix.Apply(plan, plan.Hashes(), filepath.Join(f.Home, "backups"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Backups) != 1 { // settings.local.json is new; MEMORY.md is backed up once
+		t.Errorf("backups: %v, want one", res.Backups)
+	}
+	c := reload(t, f)
+	for _, name := range []string{"release", "deploy"} {
+		if got := status(c, claude.KindSkill, name); got != claude.StatusDisabled {
+			t.Errorf("%s: %s, want disabled", name, got)
+		}
+	}
+	// Both dangling lines go, whichever order they were asked in, and the
+	// valid line between them stays.
+	want := "# Memory\n\n- [Alpha](alpha.md) — first\n- [Beta](beta.md) — Second memory\n"
+	if got := read(t, index); got != want {
+		t.Errorf("MEMORY.md:\n%s\nwant:\n%s", got, want)
 	}
 }

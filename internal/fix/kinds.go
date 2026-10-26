@@ -13,10 +13,12 @@ import (
 // skillOverride switches a skill off in the user's settings.local.json,
 // where Claude Code itself keeps skill toggles that apply to every project,
 // or switches it back on by removing every "off" entry for it.
-func skillOverride(c *claude.Config, p claude.Paths, r Request) (*Plan, error) {
-	found := false
+func skillOverride(ws workspace, c *claude.Config, p claude.Paths, r Request) (*Plan, error) {
+	found, active := false, false
 	for _, comp := range c.Components {
-		found = found || (comp.Kind != claude.KindAgent && comp.Name == r.Target)
+		if comp.Kind != claude.KindAgent && comp.Name == r.Target {
+			found, active = true, active || comp.Status == claude.StatusActive
+		}
 	}
 	if !found {
 		return nil, fmt.Errorf("no skill or command named %q: %w", r.Target, ErrNotApplicable)
@@ -24,7 +26,10 @@ func skillOverride(c *claude.Config, p claude.Paths, r Request) (*Plan, error) {
 
 	switch r.Value {
 	case "off":
-		ch, err := editSettings(filepath.Join(p.ConfigDir, "settings.local.json"), "skillOverrides", func(o *object) error {
+		if !active {
+			return nil, fmt.Errorf("%s is already off: %w", r.Target, ErrNotApplicable)
+		}
+		ch, err := editSettings(ws, filepath.Join(p.ConfigDir, "settings.local.json"), "skillOverrides", func(o *object) error {
 			return o.set(r.Target, "off")
 		})
 		if err != nil {
@@ -41,7 +46,7 @@ func skillOverride(c *claude.Config, p claude.Paths, r Request) (*Plan, error) {
 			if obj[r.Target] != "off" {
 				continue
 			}
-			ch, err := editSettings(l.Path, "skillOverrides", func(o *object) error {
+			ch, err := editSettings(ws, l.Path, "skillOverrides", func(o *object) error {
 				o.remove(r.Target)
 				return nil
 			})
@@ -60,7 +65,7 @@ func skillOverride(c *claude.Config, p claude.Paths, r Request) (*Plan, error) {
 
 // pluginEnabled sets enabledPlugins in the settings file that currently
 // decides the plugin, or in the user settings when none does.
-func pluginEnabled(c *claude.Config, p claude.Paths, r Request) (*Plan, error) {
+func pluginEnabled(ws workspace, c *claude.Config, p claude.Paths, r Request) (*Plan, error) {
 	var plugin *claude.Plugin
 	for i := range c.Plugins {
 		if c.Plugins[i].ID == r.Target {
@@ -84,7 +89,7 @@ func pluginEnabled(c *claude.Config, p claude.Paths, r Request) (*Plan, error) {
 	if file == "" {
 		file = filepath.Join(p.ConfigDir, "settings.json")
 	}
-	ch, err := editSettings(file, "enabledPlugins", func(o *object) error {
+	ch, err := editSettings(ws, file, "enabledPlugins", func(o *object) error {
 		return o.set(r.Target, enable)
 	})
 	if err != nil {
@@ -99,8 +104,8 @@ func pluginEnabled(c *claude.Config, p claude.Paths, r Request) (*Plan, error) {
 
 // editSettings changes one object-valued key of a settings file, keeping the
 // rest of the file as it is. An object left empty is removed.
-func editSettings(path, key string, edit func(*object) error) (Change, error) {
-	ch, err := readForChange(path)
+func editSettings(ws workspace, path, key string, edit func(*object) error) (Change, error) {
+	ch, err := ws.read(path)
 	if err != nil {
 		return ch, err
 	}
@@ -129,7 +134,7 @@ func editSettings(path, key string, edit func(*object) error) (Change, error) {
 
 // memoryIndexAdd appends a line for a memory to its store's MEMORY.md, in
 // the "- [Title](file.md) — description" form the index uses.
-func memoryIndexAdd(c *claude.Config, r Request) (*Plan, error) {
+func memoryIndexAdd(ws workspace, c *claude.Config, r Request) (*Plan, error) {
 	for _, s := range c.Memory {
 		for _, m := range s.Entries {
 			if m.Path != r.Target {
@@ -143,7 +148,7 @@ func memoryIndexAdd(c *claude.Config, r Request) (*Plan, error) {
 					return nil, fmt.Errorf("%s is already indexed: %w", m.File, ErrNotApplicable)
 				}
 			}
-			ch, err := readForChange(s.Index.Path)
+			ch, err := ws.read(s.Index.Path)
 			if err != nil {
 				return nil, err
 			}
@@ -176,7 +181,7 @@ func title(m claude.MemoryEntry) string {
 }
 
 // memoryIndexRemove drops a MEMORY.md line whose link points nowhere.
-func memoryIndexRemove(c *claude.Config, r Request) (*Plan, error) {
+func memoryIndexRemove(ws workspace, c *claude.Config, r Request) (*Plan, error) {
 	for _, s := range c.Memory {
 		if s.Index == nil || s.Index.Path != r.Target {
 			continue
@@ -185,7 +190,7 @@ func memoryIndexRemove(c *claude.Config, r Request) (*Plan, error) {
 			if l.Line != r.Line || l.Exists {
 				continue
 			}
-			ch, err := readForChange(s.Index.Path)
+			ch, err := ws.read(s.Index.Path)
 			if err != nil {
 				return nil, err
 			}

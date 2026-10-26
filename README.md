@@ -79,7 +79,11 @@ The rules follow the Claude Code documentation at
 ## Changes
 
 The UI offers a change where a lint finding has an obvious fix, and on skills
-and plugins. Nothing is written until you apply the previewed diff.
+and plugins. Nothing is written until you apply the previewed diff. A lint
+rule with several fixable findings gets one button for all of them: the
+changes are combined per file, so the preview shows one diff and the apply
+takes one backup per file. Requests that no longer apply are listed and left
+out, the rest goes ahead.
 
 | Change | File it edits |
 | --- | --- |

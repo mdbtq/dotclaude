@@ -29,6 +29,7 @@ const groups = computed(() => {
 
 const describe = (rule: string) => meta.value?.rules.find((r) => r.id === rule)?.description
 const count = (s: Severity) => findings.value.filter((f) => f.severity === s).length
+const fixesOf = (list: Finding[]) => list.flatMap((f) => (f.fix ? [f.fix] : []))
 </script>
 
 <template>
@@ -53,6 +54,9 @@ const count = (s: Severity) => findings.value.filter((f) => f.severity === s).le
       />
       <span class="font-mono">{{ rule }}</span>
       <span class="tabular text-xs font-normal text-zinc-400">{{ list.length }}</span>
+      <span v-if="fixesOf(list).length > 1" class="ml-auto font-normal">
+        <FixButton :fix="fixesOf(list)" :label="`${fixesOf(list)[0].label} — all ${fixesOf(list).length}`" />
+      </span>
     </h2>
     <p v-if="describe(rule)" class="mt-0.5 mb-2 ml-4 text-xs text-zinc-500">{{ describe(rule) }}</p>
     <ul class="divide-y divide-zinc-100 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">

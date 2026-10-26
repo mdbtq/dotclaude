@@ -52,10 +52,10 @@ export async function fetchFile(path: string, project: string): Promise<string> 
 
 // Changes go through one dialog: a component asks for a fix, the dialog
 // previews it and applies it on confirmation.
-export const pendingFix = ref<{ request: FixRequest; project: string } | null>(null)
+export const pendingFix = ref<{ requests: FixRequest[]; project: string } | null>(null)
 
-export function requestFix(request: FixRequest, project: string) {
-  pendingFix.value = { request, project }
+export function requestFix(requests: FixRequest[], project: string) {
+  pendingFix.value = { requests, project }
 }
 
 export const canChange = computed(() => meta.value !== null && !meta.value.readOnly)
@@ -70,13 +70,13 @@ async function postJSON<T>(url: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>
 }
 
-export function previewFix(request: FixRequest, project: string) {
-  return postJSON<FixPlan>('/api/fix/preview', { request, project })
+export function previewFix(requests: FixRequest[], project: string) {
+  return postJSON<FixPlan>('/api/fix/preview', { requests, project })
 }
 
 export async function applyFix(plan: FixPlan, project: string) {
   const hashes = Object.fromEntries(plan.changes.map((c) => [c.path, c.hash]))
-  const result = await postJSON<FixResult>('/api/fix/apply', { request: plan.request, project, hashes })
+  const result = await postJSON<FixResult>('/api/fix/apply', { requests: plan.requests, project, hashes })
   await load(project, true)
   return result
 }

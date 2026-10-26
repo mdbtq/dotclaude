@@ -68,7 +68,7 @@ func post(t *testing.T, h http.Handler, target, body string, header map[string]s
 func TestFixEndpoints(t *testing.T) {
 	f := testfixture.New(t)
 	h := (&server.Server{Paths: f.Paths}).Handler()
-	body := `{"request": {"kind": "plugin-enabled", "target": "ghost@market", "value": "false"}}`
+	body := `{"requests": [{"kind": "plugin-enabled", "target": "ghost@market", "value": "false"}]}`
 	ui := map[string]string{"Content-Type": "application/json", "X-Dotclaude": "1", "Origin": "http://localhost:7878"}
 
 	cases := []struct {
@@ -90,19 +90,19 @@ func TestFixEndpoints(t *testing.T) {
 	}
 
 	t.Run("not applicable", func(t *testing.T) {
-		rec := post(t, h, "/api/fix/preview", `{"request": {"kind": "remove-symlink", "target": "/etc/hosts"}}`, ui)
+		rec := post(t, h, "/api/fix/preview", `{"requests": [{"kind": "remove-symlink", "target": "/etc/hosts"}]}`, ui)
 		if rec.Code != http.StatusConflict {
 			t.Errorf("status %d, want 409", rec.Code)
 		}
 	})
 	t.Run("stale preview", func(t *testing.T) {
-		stale := `{"request": {"kind": "plugin-enabled", "target": "ghost@market", "value": "false"}, "hashes": {}}`
+		stale := `{"requests": [{"kind": "plugin-enabled", "target": "ghost@market", "value": "false"}], "hashes": {}}`
 		if rec := post(t, h, "/api/fix/apply", stale, ui); rec.Code != http.StatusConflict {
 			t.Errorf("status %d, want 409", rec.Code)
 		}
 	})
 	t.Run("unknown project", func(t *testing.T) {
-		other := `{"project": "` + f.Repo + `", "request": {"kind": "plugin-enabled", "target": "ghost@market", "value": "false"}}`
+		other := `{"project": "` + f.Repo + `", "requests": [{"kind": "plugin-enabled", "target": "ghost@market", "value": "false"}]}`
 		if rec := post(t, h, "/api/fix/preview", other, ui); rec.Code != http.StatusForbidden {
 			t.Errorf("status %d, want 403 for a directory Claude Code has not been started in", rec.Code)
 		}

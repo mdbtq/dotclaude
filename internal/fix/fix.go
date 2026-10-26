@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -68,11 +69,20 @@ type Change struct {
 	linkTarget string
 }
 
-// Plan is a previewable set of changes.
+// Plan is a previewable set of changes, for one request or several.
 type Plan struct {
-	Request Request  `json:"request"`
-	Title   string   `json:"title"`
-	Changes []Change `json:"changes"`
+	Requests []Request `json:"requests"`
+	Title    string    `json:"title"`
+	Changes  []Change  `json:"changes"`
+	// Skipped lists requests that no longer apply, with the reason. The rest
+	// of the batch goes ahead without them.
+	Skipped []Skip `json:"skipped,omitempty"`
+}
+
+// Skip is a request left out of a plan.
+type Skip struct {
+	Request Request `json:"request"`
+	Reason  string  `json:"reason"`
 }
 
 // Result reports what Apply did.
@@ -82,38 +92,138 @@ type Result struct {
 	Backups []string `json:"backups"`
 }
 
-// Prepare checks a request against the configuration and works out the
-// changes it needs. It touches nothing.
-func Prepare(c *claude.Config, p claude.Paths, r Request) (*Plan, error) {
-	var (
-		plan *Plan
-		err  error
-	)
-	switch r.Kind {
-	case SkillOverride:
-		plan, err = skillOverride(c, p, r)
-	case PluginEnabled:
-		plan, err = pluginEnabled(c, p, r)
-	case MemoryIndexAdd:
-		plan, err = memoryIndexAdd(c, r)
-	case MemoryIndexRemove:
-		plan, err = memoryIndexRemove(c, r)
-	case RemoveSymlink:
-		plan, err = removeSymlink(c, r)
-	default:
-		return nil, fmt.Errorf("unknown kind %q", r.Kind)
-	}
-	if err != nil {
-		return nil, err
-	}
-	plan.Request = r
-	for i := range plan.Changes {
-		ch := &plan.Changes[i]
-		if ch.Op == "write" {
-			ch.Diff = unifiedDiff(ch.before, ch.after, 3)
+// Prepare checks requests against the configuration and works out the
+// changes they need, as one plan: requests that touch the same file build on
+// each other and end up as one change to it, with one diff and one backup.
+// A request that no longer applies is skipped unless it is the only one.
+// Prepare touches nothing.
+func Prepare(c *claude.Config, p claude.Paths, requests []Request) (*Plan, error) {
+	requests = order(dedupe(requests))
+	plan := &Plan{Requests: requests}
+	ws := workspace{}
+	var touched []string
+	removed := map[string]bool{}
+	for _, r := range requests {
+		var (
+			part *Plan
+			err  error
+		)
+		switch r.Kind {
+		case SkillOverride:
+			part, err = skillOverride(ws, c, p, r)
+		case PluginEnabled:
+			part, err = pluginEnabled(ws, c, p, r)
+		case MemoryIndexAdd:
+			part, err = memoryIndexAdd(ws, c, r)
+		case MemoryIndexRemove:
+			part, err = memoryIndexRemove(ws, c, r)
+		case RemoveSymlink:
+			part, err = removeSymlink(c, r)
+		default:
+			err = fmt.Errorf("unknown kind %q", r.Kind)
+		}
+		if err != nil {
+			if len(requests) > 1 && errors.Is(err, ErrNotApplicable) {
+				plan.Skipped = append(plan.Skipped, Skip{Request: r, Reason: err.Error()})
+				continue
+			}
+			return nil, err
+		}
+		plan.Title = part.Title
+		for _, ch := range part.Changes {
+			if ch.Op == "remove" {
+				if !removed[ch.Path] {
+					removed[ch.Path] = true
+					plan.Changes = append(plan.Changes, ch)
+				}
+				continue
+			}
+			if ws[ch.Path] == nil {
+				touched = append(touched, ch.Path)
+			}
+			ws.record(ch)
 		}
 	}
+	for _, path := range touched {
+		ch := *ws[path]
+		ch.Diff = unifiedDiff(ch.before, ch.after, 3)
+		plan.Changes = append(plan.Changes, ch)
+	}
+	if len(plan.Changes) == 0 {
+		return nil, fmt.Errorf("none of the %d changes applies any more: %w", len(requests), ErrNotApplicable)
+	}
+	if applied := len(requests) - len(plan.Skipped); applied > 1 {
+		plan.Title = fmt.Sprintf("%d changes in %d %s", applied, len(plan.Changes), plural(len(plan.Changes), "file", "files"))
+	}
 	return plan, nil
+}
+
+// dedupe drops repeated requests, which would otherwise apply twice.
+func dedupe(requests []Request) []Request {
+	seen := map[Request]bool{}
+	var out []Request
+	for _, r := range requests {
+		key := r
+		key.Label = ""
+		if !seen[key] {
+			seen[key] = true
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// order puts index-line removals last and bottom-up, so removing one line
+// never shifts the line number of another.
+func order(requests []Request) []Request {
+	sort.SliceStable(requests, func(i, j int) bool {
+		a, b := requests[i], requests[j]
+		if (a.Kind == MemoryIndexRemove) != (b.Kind == MemoryIndexRemove) {
+			return b.Kind == MemoryIndexRemove
+		}
+		return a.Kind == MemoryIndexRemove && a.Line > b.Line
+	})
+	return requests
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
+// workspace holds the files a batch has changed so far, so each request
+// builds on the ones before it.
+type workspace map[string]*Change
+
+// read returns a file to change: its content so far in this batch, or from
+// disk. Symlinks are resolved, so the write lands in the file the link points
+// to and the link survives.
+func (w workspace) read(path string) (Change, error) {
+	if info, err := os.Lstat(path); err == nil && info.Mode()&fs.ModeSymlink != 0 {
+		real, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return Change{}, fmt.Errorf("%s is a symlink to a missing file; dotclaude will not replace the link: %w", path, ErrNotApplicable)
+		}
+		path = real
+	}
+	if ch, ok := w[path]; ok {
+		next := *ch
+		next.before = ch.after
+		return next, nil
+	}
+	return readFile(path)
+}
+
+// record keeps a change, preserving the original content and hash of a file
+// an earlier request in the batch already changed.
+func (w workspace) record(ch Change) {
+	if prev, ok := w[ch.Path]; ok {
+		prev.after = ch.after
+		return
+	}
+	w[ch.Path] = &ch
 }
 
 // Apply carries out a plan. hashes maps each path to the hash the preview
@@ -153,16 +263,8 @@ func Apply(plan *Plan, hashes map[string]string, backupDir string) (Result, erro
 	return res, nil
 }
 
-// readForChange reads a file to be changed. Symlinks are resolved, so the
-// write lands in the file the link points to and the link survives.
-func readForChange(path string) (Change, error) {
-	if info, err := os.Lstat(path); err == nil && info.Mode()&fs.ModeSymlink != 0 {
-		real, err := filepath.EvalSymlinks(path)
-		if err != nil {
-			return Change{}, fmt.Errorf("%s is a symlink to a missing file; dotclaude will not replace the link: %w", path, ErrNotApplicable)
-		}
-		path = real
-	}
+// readFile reads a file from disk as the starting point of a change.
+func readFile(path string) (Change, error) {
 	ch := Change{Path: path, Op: "write"}
 	data, err := os.ReadFile(path)
 	switch {

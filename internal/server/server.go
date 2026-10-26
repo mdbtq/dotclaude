@@ -4,6 +4,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"net"
 	"net/http"
@@ -142,16 +143,19 @@ func allowedFiles(c *claude.Config) map[string]bool {
 }
 
 type fixBody struct {
-	Project string            `json:"project"`
-	Request fix.Request       `json:"request"`
-	Hashes  map[string]string `json:"hashes"`
+	Project  string            `json:"project"`
+	Requests []fix.Request     `json:"requests"`
+	Hashes   map[string]string `json:"hashes"`
 }
+
+// maxBatch caps how many changes one request may ask for.
+const maxBatch = 500
 
 // prepareFix re-derives the plan from the configuration as it is now, so the
 // client only names a change and never supplies a path to write to.
 func (s *Server) prepareFix(w http.ResponseWriter, r *http.Request) (*fix.Plan, fixBody, bool) {
 	var body fixBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&body); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
 		http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
 		return nil, body, false
 	}
@@ -164,7 +168,11 @@ func (s *Server) prepareFix(w http.ResponseWriter, r *http.Request) (*fix.Plan, 
 		http.Error(w, "changes are only made for the user level or a project Claude Code has been started in", http.StatusForbidden)
 		return nil, body, false
 	}
-	plan, err := fix.Prepare(c, s.Paths, body.Request)
+	if len(body.Requests) == 0 || len(body.Requests) > maxBatch {
+		http.Error(w, fmt.Sprintf("send between 1 and %d requests", maxBatch), http.StatusBadRequest)
+		return nil, body, false
+	}
+	plan, err := fix.Prepare(c, s.Paths, body.Requests)
 	if err != nil {
 		status := http.StatusBadRequest
 		if errors.Is(err, fix.ErrNotApplicable) {

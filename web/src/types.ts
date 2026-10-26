@@ -156,9 +156,10 @@ export interface FixRequest {
 }
 
 export interface FixPlan {
-  request: FixRequest
+  requests: FixRequest[]
   title: string
   changes: { path: string; op: 'write' | 'remove'; diff: string; hash: string }[]
+  skipped?: { request: FixRequest; reason: string }[]
 }
 
 export interface FixResult {

@@ -97,7 +97,7 @@ func TestPluginEnabled(t *testing.T) {
 		}
 	}
 	c := reload(t, f)
-	if _, err := fix.Prepare(c, f.Paths, []fix.Request{fix.Request{Kind: fix.PluginEnabled, Target: "ghost@market", Value: "true"}}); !errors.Is(err, fix.ErrNotApplicable) {
+	if _, err := fix.Prepare(c, f.Paths, []fix.Request{{Kind: fix.PluginEnabled, Target: "ghost@market", Value: "true"}}); !errors.Is(err, fix.ErrNotApplicable) {
 		t.Errorf("enabling an uninstalled plugin: %v, want not applicable", err)
 	}
 }
@@ -118,7 +118,7 @@ func TestMemoryIndex(t *testing.T) {
 
 	// Done twice, it no longer applies.
 	c := reload(t, f)
-	if _, err := fix.Prepare(c, f.Paths, []fix.Request{fix.Request{Kind: fix.MemoryIndexAdd, Target: filepath.Join(mem, "beta.md")}}); !errors.Is(err, fix.ErrNotApplicable) {
+	if _, err := fix.Prepare(c, f.Paths, []fix.Request{{Kind: fix.MemoryIndexAdd, Target: filepath.Join(mem, "beta.md")}}); !errors.Is(err, fix.ErrNotApplicable) {
 		t.Errorf("indexing beta again: %v", err)
 	}
 }
@@ -137,7 +137,7 @@ func TestRemoveSymlink(t *testing.T) {
 	// A path that is not a dangling skill is refused.
 	c := reload(t, f)
 	settings := filepath.Join(f.Home, ".claude", "settings.json")
-	if _, err := fix.Prepare(c, f.Paths, []fix.Request{fix.Request{Kind: fix.RemoveSymlink, Target: settings}}); !errors.Is(err, fix.ErrNotApplicable) {
+	if _, err := fix.Prepare(c, f.Paths, []fix.Request{{Kind: fix.RemoveSymlink, Target: settings}}); !errors.Is(err, fix.ErrNotApplicable) {
 		t.Errorf("removing settings.json: %v, want not applicable", err)
 	}
 }
@@ -145,7 +145,7 @@ func TestRemoveSymlink(t *testing.T) {
 func TestApplyRefusesChangedFile(t *testing.T) {
 	f := testfixture.New(t)
 	c := reload(t, f)
-	plan, err := fix.Prepare(c, f.Paths, []fix.Request{fix.Request{Kind: fix.PluginEnabled, Target: "ghost@market", Value: "false"}})
+	plan, err := fix.Prepare(c, f.Paths, []fix.Request{{Kind: fix.PluginEnabled, Target: "ghost@market", Value: "false"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func TestApplyRefusesChangedFile(t *testing.T) {
 
 func TestDiffReplacement(t *testing.T) {
 	f := testfixture.New(t)
-	plan, err := fix.Prepare(reload(t, f), f.Paths, []fix.Request{fix.Request{Kind: fix.PluginEnabled, Target: "ghost@market", Value: "false"}})
+	plan, err := fix.Prepare(reload(t, f), f.Paths, []fix.Request{{Kind: fix.PluginEnabled, Target: "ghost@market", Value: "false"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestDiffReplacement(t *testing.T) {
 
 func TestDiff(t *testing.T) {
 	f := testfixture.New(t)
-	plan, err := fix.Prepare(reload(t, f), f.Paths, []fix.Request{fix.Request{Kind: fix.MemoryIndexRemove, Target: filepath.Join(f.Home, ".claude", "memory", "MEMORY.md"), Line: 4}})
+	plan, err := fix.Prepare(reload(t, f), f.Paths, []fix.Request{{Kind: fix.MemoryIndexRemove, Target: filepath.Join(f.Home, ".claude", "memory", "MEMORY.md"), Line: 4}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func TestRefusesRiskyEdits(t *testing.T) {
 	if err := os.WriteFile(index, []byte("# Memory\n\n- [Alpha](alpha.md), see also [Gone](gone.md)\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fix.Prepare(reload(t, f), f.Paths, []fix.Request{fix.Request{Kind: fix.MemoryIndexRemove, Target: index, Line: 3}}); !errors.Is(err, fix.ErrNotApplicable) {
+	if _, err := fix.Prepare(reload(t, f), f.Paths, []fix.Request{{Kind: fix.MemoryIndexRemove, Target: index, Line: 3}}); !errors.Is(err, fix.ErrNotApplicable) {
 		t.Errorf("removing a line that also holds a valid link: %v, want not applicable", err)
 	}
 
@@ -203,7 +203,7 @@ func TestRefusesRiskyEdits(t *testing.T) {
 	if err := os.Symlink(filepath.Join(f.Home, "dotfiles", "settings.local.json"), local); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fix.Prepare(reload(t, f), f.Paths, []fix.Request{fix.Request{Kind: fix.SkillOverride, Target: "release", Value: "off"}}); !errors.Is(err, fix.ErrNotApplicable) {
+	if _, err := fix.Prepare(reload(t, f), f.Paths, []fix.Request{{Kind: fix.SkillOverride, Target: "release", Value: "off"}}); !errors.Is(err, fix.ErrNotApplicable) {
 		t.Errorf("writing through a dangling symlink: %v, want not applicable", err)
 	}
 }

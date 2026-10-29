@@ -18,8 +18,9 @@ const { config, findings } = useConfig()
 const search = ref('')
 const status = ref('active')
 const origin = ref('all')
+const plugin = ref('')
 const selected = ref<Component | null>(null)
-watch(() => props.kind, () => { search.value = ''; selected.value = null })
+watch(() => props.kind, () => { search.value = ''; plugin.value = ''; selected.value = null })
 
 const meta: Record<Kind, { title: string; subtitle: string }> = {
   agent: {
@@ -44,11 +45,39 @@ const counts = computed(() => {
   return n
 })
 
+// Plugin ids are name@marketplace, so one list offers both levels: a
+// marketplace value matches every plugin from it, a plugin value just that one.
+function marketplaceOf(c: Component) {
+  const id = c.source.plugin
+  return id ? id.slice(id.lastIndexOf('@') + 1) : ''
+}
+
+const pluginOptions = computed(() => {
+  const plugins = new Map<string, number>()
+  const markets = new Map<string, number>()
+  for (const c of all.value) {
+    const id = c.source.plugin
+    if (!id) continue
+    const market = marketplaceOf(c)
+    plugins.set(id, (plugins.get(id) ?? 0) + 1)
+    markets.set(market, (markets.get(market) ?? 0) + 1)
+  }
+  const sorted = (m: Map<string, number>) => [...m].sort(([a], [b]) => a.localeCompare(b))
+  return { plugins: sorted(plugins), markets: sorted(markets) }
+})
+
+function matchesPlugin(c: Component) {
+  if (!plugin.value || origin.value === 'own') return true
+  const id = c.source.plugin ?? ''
+  return plugin.value.startsWith('@') ? id.endsWith(plugin.value) : id === plugin.value
+}
+
 const rows = computed(() => {
   const q = search.value.toLowerCase()
   return all.value
     .filter((c) => status.value === 'all' || c.status === status.value)
     .filter((c) => origin.value === 'all' || (origin.value === 'plugin' ? c.source.scope === 'plugin' : c.source.scope !== 'plugin'))
+    .filter(matchesPlugin)
     .filter((c) => !q || c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q) || (c.source.plugin ?? '').includes(q))
     .sort((a, b) => a.name.localeCompare(b.name))
 })
@@ -92,6 +121,19 @@ function show(v: unknown) {
       ]"
     />
     <Segmented v-model="origin" :options="[{ value: 'all', label: 'Any source' }, { value: 'own', label: 'Own' }, { value: 'plugin', label: 'Plugins' }]" />
+    <select
+      v-if="origin !== 'own' && pluginOptions.plugins.length"
+      v-model="plugin"
+      class="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-accent-500 dark:border-zinc-700 dark:bg-zinc-900"
+    >
+      <option value="">Any plugin</option>
+      <optgroup label="Marketplace">
+        <option v-for="[m, n] in pluginOptions.markets" :key="m" :value="'@' + m">{{ m }} ({{ n }})</option>
+      </optgroup>
+      <optgroup label="Plugin">
+        <option v-for="[id, n] in pluginOptions.plugins" :key="id" :value="id">{{ id }} ({{ n }})</option>
+      </optgroup>
+    </select>
     <SearchInput v-model="search" />
   </PageHeader>
 
@@ -102,7 +144,7 @@ function show(v: unknown) {
         <tr>
           <th class="w-[34%] px-4 py-2 font-medium">Name</th>
           <th class="hidden px-4 py-2 font-medium md:table-cell">Description</th>
-          <th class="w-32 px-4 py-2 font-medium">Source</th>
+          <th class="w-40 px-4 py-2 font-medium">Source</th>
           <th v-if="kind !== 'agent'" class="hidden w-28 px-4 py-2 text-right font-medium sm:table-cell">Used</th>
         </tr>
       </thead>
@@ -124,7 +166,10 @@ function show(v: unknown) {
           <td class="hidden px-4 py-2.5 text-zinc-500 md:table-cell">
             <span class="line-clamp-1">{{ c.error ?? c.description }}</span>
           </td>
-          <td class="px-4 py-2.5"><ScopeBadge :source="c.source" /></td>
+          <td class="px-4 py-2.5">
+            <ScopeBadge :source="c.source" />
+            <div v-if="c.source.plugin" class="mt-0.5 truncate text-[11px] text-zinc-400" :title="marketplaceOf(c)">{{ marketplaceOf(c) }}</div>
+          </td>
           <td v-if="kind !== 'agent'" class="tabular hidden px-4 py-2.5 text-right text-zinc-500 sm:table-cell">
             <span v-if="c.usage" :title="relativeTime(c.usage.lastUsed)">{{ c.usage.count }}×</span>
             <span v-else class="text-zinc-300 dark:text-zinc-600">—</span>
@@ -141,6 +186,7 @@ function show(v: unknown) {
         <div v-if="selected.statusNote" class="mt-0.5 text-xs text-zinc-500">{{ selected.statusNote }}</div>
       </Field>
       <Field label="Source"><ScopeBadge :source="selected.source" /></Field>
+      <Field v-if="selected.source.plugin" label="Marketplace">{{ marketplaceOf(selected) }}</Field>
       <Field v-if="toggle" label="Change"><FixButton :fix="toggle" /></Field>
       <Field v-if="selected.description" label="Description">{{ selected.description }}</Field>
       <Field v-if="selected.usage" label="Used">{{ selected.usage.count }} times, last {{ relativeTime(selected.usage.lastUsed) }}</Field>

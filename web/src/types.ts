@@ -82,6 +82,8 @@ export interface Instruction {
   import?: string
   line?: number
   external?: boolean
+  appliesUnder?: string
+  projects?: number
   imports?: Instruction[]
 }
 

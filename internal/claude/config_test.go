@@ -76,8 +76,11 @@ func TestUserLevel(t *testing.T) {
 	if len(c.Memory) != 1 || len(c.Memory[0].Entries) != 2 || c.Memory[0].Entries[0].Type != "feedback" {
 		t.Errorf("memory: %+v", c.Memory)
 	}
-	if got := len(c.Instructions); got != 2 {
-		t.Errorf("instructions: %d, want user CLAUDE.md and one user rule", got)
+	if got := len(c.Instructions); got != 3 {
+		t.Fatalf("instructions: %d, want user CLAUDE.md, one user rule and one above the project", got)
+	}
+	if parent := c.Instructions[2]; parent.Path != filepath.Join(f.Home, "code", "CLAUDE.md") || parent.AppliesUnder != filepath.Join(f.Home, "code") || parent.Projects != 1 {
+		t.Errorf("instruction above the project: %+v, want code/CLAUDE.md applying under code to one project", parent)
 	}
 }
 
@@ -143,11 +146,11 @@ func TestProject(t *testing.T) {
 		rel, _ := filepath.Rel(f.Home, in.Path)
 		order = append(order, rel)
 	}
-	want := []string{".claude/CLAUDE.md", ".claude/rules/style.md", "code/repo/CLAUDE.md", "code/repo/app/CLAUDE.local.md", "code/repo/app/.claude/rules/api.md"}
+	want := []string{".claude/CLAUDE.md", ".claude/rules/style.md", "code/CLAUDE.md", "code/repo/CLAUDE.md", "code/repo/app/CLAUDE.local.md", "code/repo/app/.claude/rules/api.md"}
 	if strings.Join(order, " ") != strings.Join(want, " ") {
 		t.Errorf("instruction order:\n got %v\nwant %v", order, want)
 	}
-	if rule := c.Instructions[4]; !rule.Conditional {
+	if rule := c.Instructions[5]; !rule.Conditional {
 		t.Errorf("api rule should be path-scoped")
 	}
 	imports := c.Instructions[0].Imports

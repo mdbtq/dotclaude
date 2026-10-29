@@ -157,7 +157,7 @@ func Load(p Paths, projectDir string) (*Config, error) {
 	}
 
 	c.MCPServers = c.loadMCP(p, g, contents)
-	c.Instructions = c.loadInstructions(p)
+	c.Instructions = c.loadInstructions(p, g)
 	c.Memory = c.loadMemory(p, g, merged)
 
 	for path := range g.Projects {
@@ -337,7 +337,7 @@ func (c *Config) loadMCP(p Paths, g globalConfig, contents []pluginContents) []M
 	return out
 }
 
-func (c *Config) loadInstructions(p Paths) []Instruction {
+func (c *Config) loadInstructions(p Paths, g globalConfig) []Instruction {
 	var out []Instruction
 	skip := map[string]bool{}
 	add := func(path string, scope Scope, kind string) {
@@ -352,9 +352,13 @@ func (c *Config) loadInstructions(p Paths) []Instruction {
 		add(path, ScopeUser, "rule")
 	})
 	if c.Project != "" {
-		out = append(out, projectInstructions(c.Project, c.ProjectRoot, skip)...)
+		return append(out, projectInstructions(c.Project, c.ProjectRoot, skip)...)
 	}
-	return out
+	projects := make([]string, 0, len(g.Projects))
+	for path := range g.Projects {
+		projects = append(projects, path)
+	}
+	return append(out, ancestorInstructions(projects, skip)...)
 }
 
 func (c *Config) loadMemory(p Paths, g globalConfig, merged map[string]any) []MemoryStore {

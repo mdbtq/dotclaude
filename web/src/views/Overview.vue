@@ -11,6 +11,10 @@ function linkTo(path: string) {
   return { path, query: project.value ? { project: project.value } : {} }
 }
 
+// In the user-level view, files above known projects load only below their
+// directory, so they are not part of what loads at launch.
+const loaded = computed(() => config.value?.instructions.filter((i) => !i.appliesUnder) ?? [])
+
 const stats = computed(() => {
   const c = config.value!
   const comps = (kind: string) => c.components.filter((x) => x.kind === kind)
@@ -23,7 +27,7 @@ const stats = computed(() => {
     { label: 'Hooks', to: '/hooks', value: active(c.hooks ?? []), total: c.hooks?.length ?? 0 },
     { label: 'MCP servers', to: '/mcp', value: active(c.mcpServers ?? []), total: c.mcpServers?.length ?? 0 },
     { label: 'Memories', to: '/memory', value: c.memory?.reduce((n, s) => n + s.entries.length, 0) ?? 0, total: undefined, note: `${c.memory?.length ?? 0} stores` },
-    { label: 'Instruction files', to: '/instructions', value: c.instructions.length, total: undefined },
+    { label: 'Instruction files', to: '/instructions', value: loaded.value.length, total: undefined },
   ]
 })
 
@@ -50,7 +54,7 @@ const instructionLines = computed(() => {
       walk(i.imports ?? [])
     }
   }
-  walk(config.value?.instructions ?? [])
+  walk(loaded.value)
   return n
 })
 </script>
@@ -108,7 +112,7 @@ const instructionLines = computed(() => {
         <RouterLink :to="linkTo('/instructions')" class="text-xs text-accent-600 hover:underline">Details →</RouterLink>
       </div>
       <ol class="divide-y divide-zinc-100 px-4 py-2 text-sm dark:divide-zinc-800">
-        <li v-for="i in config!.instructions" :key="i.path" class="flex items-center justify-between gap-3 py-2">
+        <li v-for="i in loaded" :key="i.path" class="flex items-center justify-between gap-3 py-2">
           <span class="flex min-w-0 items-center gap-2">
             <ScopeBadge :source="{ scope: i.scope }" />
             <span class="truncate font-mono text-xs">{{ tilde(i.path) }}</span>

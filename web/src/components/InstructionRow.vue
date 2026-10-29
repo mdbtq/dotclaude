@@ -29,6 +29,9 @@ const kinds: Record<string, string> = {
           {{ item.import ?? tilde(item.path) }}
         </span>
         <span v-if="item.import" class="block truncate font-mono text-[11px] text-zinc-400">line {{ item.line }} → {{ tilde(item.path) }}</span>
+        <span v-if="item.appliesUnder" class="block truncate text-[11px] text-zinc-400">
+          projects under {{ tilde(item.appliesUnder) }} · {{ item.projects }} known
+        </span>
       </span>
       <span v-if="item.conditional" class="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] text-zinc-500 dark:bg-zinc-800">path-scoped</span>
       <span v-if="item.external" class="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700 dark:bg-amber-950 dark:text-amber-300">external</span>

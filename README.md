@@ -69,7 +69,9 @@ The rules follow the Claude Code documentation at
   `.claude/CLAUDE.md` and `CLAUDE.local.md` for each directory from the
   filesystem root down to the start directory, then `.claude/rules`.
   `@imports` are followed four hops deep. `AGENTS.md` is read only when no
-  `CLAUDE.md` exists in that chain.
+  `CLAUDE.md` exists in that chain. Without a project, the instruction files
+  in directories above your known projects are listed separately, since each
+  loads only in projects below it.
 - **Agents**: project (closest directory first) > user > plugin.
 - **Skills and commands** share one namespace: managed > user > project, and a
   skill beats a command with the same name. `skillOverrides: "off"` switches

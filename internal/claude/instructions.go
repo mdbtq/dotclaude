@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -29,7 +30,12 @@ type Instruction struct {
 	Line int `json:"line,omitempty"`
 	// External marks a project import that resolves outside the project,
 	// which Claude Code only loads after the user approves it.
-	External bool          `json:"external,omitempty"`
+	External bool `json:"external,omitempty"`
+	// AppliesUnder is set in the user-level view for files in a directory
+	// above known projects: they load only in projects below that directory.
+	AppliesUnder string `json:"appliesUnder,omitempty"`
+	// Projects is how many known projects AppliesUnder covers.
+	Projects int           `json:"projects,omitempty"`
 	Imports  []Instruction `json:"imports,omitempty"`
 }
 
@@ -181,6 +187,50 @@ func projectInstructions(dir, projectRoot string, skip map[string]bool) []Instru
 		}
 	}
 	for _, d := range chain {
+		walkMarkdown(filepath.Join(d, ".claude", "rules"), func(path, _ string) {
+			add(path, ScopeProject, "rule")
+		})
+	}
+	return out
+}
+
+// ancestorInstructions lists, for the user-level view, the instruction files
+// in directories above the known projects' repository roots. Each loads only
+// in projects below its directory, so it applies by project path rather than
+// everywhere. Paths in skip (the user's own files) are left out.
+func ancestorInstructions(projects []string, skip map[string]bool) []Instruction {
+	under := map[string]int{}
+	for _, proj := range projects {
+		if !isDir(proj) {
+			continue
+		}
+		root, _ := repoRoot(proj)
+		for d := filepath.Dir(root); ; d = filepath.Dir(d) {
+			under[d]++
+			if filepath.Dir(d) == d {
+				break
+			}
+		}
+	}
+	dirs := make([]string, 0, len(under))
+	for d := range under {
+		dirs = append(dirs, d)
+	}
+	sort.Strings(dirs)
+
+	var out []Instruction
+	for _, d := range dirs {
+		add := func(path string, scope Scope, kind string) {
+			if skip[path] || !isFile(path) {
+				return
+			}
+			in := readInstruction(path, scope, kind, "", 0, map[string]bool{})
+			in.AppliesUnder, in.Projects = d, under[d]
+			out = append(out, in)
+		}
+		add(filepath.Join(d, "CLAUDE.md"), ScopeProject, "claude-md")
+		add(filepath.Join(d, ".claude", "CLAUDE.md"), ScopeProject, "claude-md")
+		add(filepath.Join(d, "CLAUDE.local.md"), ScopeLocal, "local")
 		walkMarkdown(filepath.Join(d, ".claude", "rules"), func(path, _ string) {
 			add(path, ScopeProject, "rule")
 		})

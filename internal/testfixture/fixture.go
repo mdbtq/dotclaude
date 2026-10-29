@@ -78,6 +78,7 @@ func New(t *testing.T) Fixture {
 		pluginRel(home, plugin, ".mcp.json"):                  `{"mcpServers": {"example-docs": {"type": "http", "url": "https://docs.example.com/mcp"}}}`,
 
 		// Project.
+		"code/CLAUDE.md":                              "# Code\n",
 		"code/repo/.git/HEAD":                         "ref: refs/heads/main\n",
 		"code/repo/CLAUDE.md":                         "# Repo\n",
 		"code/repo/.mcp.json":                         `{"mcpServers": {"shared": {"command": "project-shared"}, "team": {"command": "team-server"}}}`,

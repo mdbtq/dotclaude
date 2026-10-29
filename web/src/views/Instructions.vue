@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { Instruction } from '../types'
 import { tilde, useConfig } from '../store'
 import PageHeader from '../components/PageHeader.vue'
@@ -9,6 +9,9 @@ import Empty from '../components/Empty.vue'
 
 const { config, project } = useConfig()
 const selected = ref<Instruction | null>(null)
+
+const always = computed(() => config.value!.instructions.filter((i) => !i.appliesUnder))
+const byPath = computed(() => config.value!.instructions.filter((i) => i.appliesUnder))
 </script>
 
 <template>
@@ -19,12 +22,25 @@ const selected = ref<Instruction | null>(null)
       : 'Your user-level instruction files. Pick a project to see the full chain, including CLAUDE.md files in parent directories.'"
   />
   <Empty v-if="!config!.instructions.length">No instruction files found.</Empty>
-  <ol v-else class="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-    <InstructionRow v-for="(i, n) in config!.instructions" :key="i.path" :item="i" :index="n + 1" :depth="0" @select="selected = $event" />
+  <ol v-if="always.length" class="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+    <InstructionRow v-for="(i, n) in always" :key="i.path" :item="i" :index="n + 1" :depth="0" @select="selected = $event" />
   </ol>
+
+  <section v-if="byPath.length" class="mt-8">
+    <h2 class="text-sm font-semibold">By project path</h2>
+    <p class="mb-3 mt-1 max-w-3xl text-sm text-zinc-500">
+      Files in directories above your known projects. Each loads only in projects below its directory, after the files above.
+    </p>
+    <ol class="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <InstructionRow v-for="(i, n) in byPath" :key="i.path" :item="i" :index="n + 1" :depth="0" @select="selected = $event" />
+    </ol>
+  </section>
 
   <Drawer v-if="selected" :title="selected.import ?? tilde(selected.path).split('/').pop()!" :path="selected.exists ? selected.path : undefined" @close="selected = null">
     <p v-if="!selected.exists" class="text-red-600">This import does not resolve to a file: {{ selected.path }}</p>
+    <p v-if="selected.appliesUnder" class="text-zinc-500">
+      Loads only in projects under <code>{{ tilde(selected.appliesUnder) }}</code>: {{ selected.projects }} of your known projects.
+    </p>
     <p v-if="selected.conditional" class="text-zinc-500">This rule has a <code>paths</code> field, so it only loads when Claude works with a matching file.</p>
     <p v-if="selected.external" class="text-zinc-500">This import points outside the project. Claude Code loads it only after you approve external imports for the project.</p>
   </Drawer>

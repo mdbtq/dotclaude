@@ -142,9 +142,9 @@ function show(v: unknown) {
     <table class="w-full table-fixed text-sm">
       <thead class="border-b border-zinc-200 text-left text-xs text-zinc-500 dark:border-zinc-800">
         <tr>
-          <th class="w-[34%] px-4 py-2 font-medium">Name</th>
-          <th class="hidden px-4 py-2 font-medium md:table-cell">Description</th>
-          <th class="w-40 px-4 py-2 font-medium">Source</th>
+          <th class="px-4 py-2 font-medium">Name</th>
+          <th class="w-36 px-4 py-2 font-medium">Source</th>
+          <th class="hidden w-40 px-4 py-2 font-medium md:table-cell">Marketplace</th>
           <th v-if="kind !== 'agent'" class="hidden w-28 px-4 py-2 text-right font-medium sm:table-cell">Used</th>
         </tr>
       </thead>
@@ -162,13 +162,12 @@ function show(v: unknown) {
               <span class="truncate font-mono text-[13px]">{{ c.name }}</span>
               <span v-if="c.error || problemsByPath.get(c.path)" class="shrink-0 rounded bg-amber-100 px-1 text-[11px] font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">!</span>
             </div>
+            <div v-if="c.error ?? c.description" class="mt-0.5 truncate pl-4 text-xs text-zinc-500" :title="c.error ?? c.description">{{ c.error ?? c.description }}</div>
           </td>
-          <td class="hidden px-4 py-2.5 text-zinc-500 md:table-cell">
-            <span class="line-clamp-1">{{ c.error ?? c.description }}</span>
-          </td>
-          <td class="px-4 py-2.5">
-            <ScopeBadge :source="c.source" />
-            <div v-if="c.source.plugin" class="mt-0.5 truncate text-[11px] text-zinc-400" :title="marketplaceOf(c)">{{ marketplaceOf(c) }}</div>
+          <td class="px-4 py-2.5"><ScopeBadge :source="c.source" /></td>
+          <td class="hidden truncate px-4 py-2.5 text-xs text-zinc-500 md:table-cell" :title="marketplaceOf(c)">
+            <span v-if="c.source.plugin">{{ marketplaceOf(c) }}</span>
+            <span v-else class="text-zinc-300 dark:text-zinc-600">—</span>
           </td>
           <td v-if="kind !== 'agent'" class="tabular hidden px-4 py-2.5 text-right text-zinc-500 sm:table-cell">
             <span v-if="c.usage" :title="relativeTime(c.usage.lastUsed)">{{ c.usage.count }}×</span>

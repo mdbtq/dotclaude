@@ -25,6 +25,7 @@ func TestRulesOnFixture(t *testing.T) {
 		"component/unreadable":        filepath.Join(f.Home, ".claude", "skills", "dangling"),
 		"component/missing-name":      filepath.Join(f.Home, ".claude", "agents", "nameless.md"),
 		"component/shadowed":          filepath.Join(f.Home, ".claude", "agents", "reviewer.md"),
+		"skill/untracked":             filepath.Join(f.Home, ".claude", "skills", "orphan", "SKILL.md"),
 		"skill/trigger-overlap":       filepath.Join(f.Home, ".claude", "skills", "deploy", "SKILL.md"),
 		"instructions/import-missing": filepath.Join(f.Home, ".claude", "CLAUDE.md"),
 		"memory/index-dangling":       filepath.Join(mem, "MEMORY.md"),
@@ -52,6 +53,10 @@ func TestRulesOnFixture(t *testing.T) {
 	// The plugin hook script exists, so only the user hook is reported.
 	if n := len(got["hook/command-missing"]); n != 1 {
 		t.Errorf("hook/command-missing: %d findings, want 1", n)
+	}
+	// The orphan symlink and the copy; not the tracked or the linked skill.
+	if n := len(got["skill/untracked"]); n != 2 {
+		t.Errorf("skill/untracked: %d findings, want 2: %+v", n, got["skill/untracked"])
 	}
 	for rule := range got {
 		known := false

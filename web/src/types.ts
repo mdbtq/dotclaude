@@ -15,6 +15,14 @@ export interface Usage {
   lastUsed: string
 }
 
+export type OriginKind = 'skills.sh' | 'untracked' | 'link' | 'local'
+
+export interface Origin {
+  kind: OriginKind
+  source?: string
+  target?: string
+}
+
 export interface Component {
   kind: Kind
   name: string
@@ -24,6 +32,7 @@ export interface Component {
   frontmatter?: Record<string, unknown>
   frontmatterError?: string
   error?: string
+  origin?: Origin
   usage?: Usage
   status: Status
   statusNote?: string

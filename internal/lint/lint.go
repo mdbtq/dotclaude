@@ -51,6 +51,7 @@ var Rules = []Rule{
 	{"component/missing-description", Warning, "An agent or skill has no description, so Claude cannot tell when to use it."},
 	{"component/shadowed", Info, "A definition is hidden by another one with the same name in a higher-precedence location."},
 	{"skill/trigger-overlap", Info, "Two active skills have very similar descriptions and may compete for the same requests."},
+	{"skill/untracked", Warning, "A skill sits in skills.sh's store, or is a copy of one, but skills.sh's lock file does not list it, so skills.sh neither updates nor removes it."},
 	{"skill/never-used", Info, "No use of the skill is recorded in Claude Code's usage counters."},
 	{"instructions/import-missing", Warning, "An @import in an instruction file points at a file that does not exist."},
 	{"instructions/too-long", Info, "An instruction file is over 200 lines; the docs advise keeping them shorter."},
@@ -125,6 +126,9 @@ func components(c *claude.Config, opt Options) []Finding {
 		}
 		if comp.Status == claude.StatusShadowed {
 			out = append(out, Finding{Rule: "component/shadowed", Severity: Info, Path: comp.Path, Message: fmt.Sprintf("%s is %s", label, comp.StatusNote)})
+		}
+		if o := comp.Origin; o != nil && o.Kind == claude.OriginUntracked {
+			out = append(out, Finding{Rule: "skill/untracked", Severity: Warning, Path: comp.Path, Related: o.Target, Message: fmt.Sprintf("%s matches %s in skills.sh's store, which its lock file does not list", label, o.Target)})
 		}
 		if comp.Kind == claude.KindSkill && comp.Status == claude.StatusActive {
 			skills = append(skills, comp)

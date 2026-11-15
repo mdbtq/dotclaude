@@ -20,7 +20,15 @@ const status = ref('active')
 const origin = ref('all')
 const plugin = ref('')
 const selected = ref<Component | null>(null)
-watch(() => props.kind, () => { search.value = ''; plugin.value = ''; selected.value = null })
+watch(() => props.kind, () => {
+  search.value = ''
+  plugin.value = ''
+  selected.value = null
+  if (origin.value === 'skills.sh') origin.value = 'all' // only offered where skills.sh installed something
+})
+// The plugin or repository list depends on the source, so a choice from the
+// previous list may no longer be in it.
+watch(origin, () => { plugin.value = '' })
 
 const meta: Record<Kind, { title: string; subtitle: string }> = {
   agent: {
@@ -52,33 +60,86 @@ function marketplaceOf(c: Component) {
   return id ? id.slice(id.lastIndexOf('@') + 1) : ''
 }
 
+// Skills skills.sh put there, tracked in its lock file or not, count as
+// installed rather than own.
+function fromSkillsSh(c: Component) {
+  return c.origin?.kind === 'skills.sh' || c.origin?.kind === 'untracked'
+}
+
+function sourceGroup(c: Component) {
+  if (c.source.scope === 'plugin') return 'plugin'
+  return fromSkillsSh(c) ? 'skills.sh' : 'own'
+}
+
+const hasSkillsSh = computed(() => all.value.some(fromSkillsSh))
+
+const sourceOptions = computed(() => [
+  { value: 'all', label: 'Any source' },
+  { value: 'own', label: 'Own' },
+  ...(hasSkillsSh.value ? [{ value: 'skills.sh', label: 'skills.sh' }] : []),
+  { value: 'plugin', label: 'Plugins' },
+])
+
 const pluginOptions = computed(() => {
   const plugins = new Map<string, number>()
   const markets = new Map<string, number>()
+  const repos = new Map<string, number>()
+  const count = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1)
   for (const c of all.value) {
     const id = c.source.plugin
-    if (!id) continue
-    const market = marketplaceOf(c)
-    plugins.set(id, (plugins.get(id) ?? 0) + 1)
-    markets.set(market, (markets.get(market) ?? 0) + 1)
+    if (id) {
+      count(plugins, id)
+      count(markets, marketplaceOf(c))
+    } else if (fromSkillsSh(c)) {
+      count(repos, c.origin?.source || 'untracked')
+    }
   }
   const sorted = (m: Map<string, number>) => [...m].sort(([a], [b]) => a.localeCompare(b))
-  return { plugins: sorted(plugins), markets: sorted(markets) }
+  return {
+    plugins: origin.value === 'skills.sh' ? [] : sorted(plugins),
+    markets: origin.value === 'skills.sh' ? [] : sorted(markets),
+    repos: origin.value === 'plugin' ? [] : sorted(repos),
+  }
 })
 
+// The filter value is '@marketplace', a plugin id, or 'repo:' plus a
+// skills.sh source ('repo:untracked' for skills its lock file does not list).
 function matchesPlugin(c: Component) {
   if (!plugin.value || origin.value === 'own') return true
+  if (plugin.value.startsWith('repo:')) return fromSkillsSh(c) && (c.origin?.source || 'untracked') === plugin.value.slice(5)
   const id = c.source.plugin ?? ''
   return plugin.value.startsWith('@') ? id.endsWith(plugin.value) : id === plugin.value
+}
+
+// What the From column and the drawer say about a component's provenance.
+function fromLabel(c: Component) {
+  if (c.source.plugin) return marketplaceOf(c)
+  switch (c.origin?.kind) {
+    case 'skills.sh': return c.origin.source || 'skills.sh'
+    case 'untracked': return 'skills.sh, untracked'
+    case 'link': return 'symlink'
+    default: return ''
+  }
+}
+
+function fromDetail(c: Component) {
+  const o = c.origin
+  if (!o) return ''
+  switch (o.kind) {
+    case 'skills.sh': return `Installed by skills.sh from ${o.source}`
+    case 'untracked': return `Matches ${o.target} in skills.sh's store, but its lock file does not list it, so skills.sh neither updates nor removes it`
+    case 'link': return `Symlink to ${o.target}`
+    default: return 'A directory in the skills folder itself'
+  }
 }
 
 const rows = computed(() => {
   const q = search.value.toLowerCase()
   return all.value
     .filter((c) => status.value === 'all' || c.status === status.value)
-    .filter((c) => origin.value === 'all' || (origin.value === 'plugin' ? c.source.scope === 'plugin' : c.source.scope !== 'plugin'))
+    .filter((c) => origin.value === 'all' || sourceGroup(c) === origin.value)
     .filter(matchesPlugin)
-    .filter((c) => !q || c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q) || (c.source.plugin ?? '').includes(q))
+    .filter((c) => !q || c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q) || (c.source.plugin ?? '').includes(q) || (c.origin?.source ?? '').toLowerCase().includes(q))
     .sort((a, b) => a.name.localeCompare(b.name))
 })
 
@@ -120,18 +181,21 @@ function show(v: unknown) {
         { value: 'all', label: 'All', count: all.length },
       ]"
     />
-    <Segmented v-model="origin" :options="[{ value: 'all', label: 'Any source' }, { value: 'own', label: 'Own' }, { value: 'plugin', label: 'Plugins' }]" />
+    <Segmented v-model="origin" :options="sourceOptions" />
     <select
-      v-if="origin !== 'own' && pluginOptions.plugins.length"
+      v-if="origin !== 'own' && (pluginOptions.plugins.length || pluginOptions.repos.length)"
       v-model="plugin"
       class="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-accent-500 dark:border-zinc-700 dark:bg-zinc-900"
     >
-      <option value="">Any plugin</option>
-      <optgroup label="Marketplace">
+      <option value="">{{ origin === 'skills.sh' ? 'Any repository' : origin === 'plugin' ? 'Any plugin' : 'Any plugin or repository' }}</option>
+      <optgroup v-if="pluginOptions.markets.length" label="Marketplace">
         <option v-for="[m, n] in pluginOptions.markets" :key="m" :value="'@' + m">{{ m }} ({{ n }})</option>
       </optgroup>
-      <optgroup label="Plugin">
+      <optgroup v-if="pluginOptions.plugins.length" label="Plugin">
         <option v-for="[id, n] in pluginOptions.plugins" :key="id" :value="id">{{ id }} ({{ n }})</option>
+      </optgroup>
+      <optgroup v-if="pluginOptions.repos.length" label="skills.sh">
+        <option v-for="[r, n] in pluginOptions.repos" :key="r" :value="'repo:' + r">{{ r }} ({{ n }})</option>
       </optgroup>
     </select>
     <SearchInput v-model="search" />
@@ -144,7 +208,7 @@ function show(v: unknown) {
         <tr>
           <th class="px-4 py-2 font-medium">Name</th>
           <th class="w-36 px-4 py-2 font-medium">Source</th>
-          <th class="hidden w-40 px-4 py-2 font-medium md:table-cell">Marketplace</th>
+          <th class="hidden w-48 px-4 py-2 font-medium md:table-cell">From</th>
           <th v-if="kind !== 'agent'" class="hidden w-28 px-4 py-2 text-right font-medium sm:table-cell">Used</th>
         </tr>
       </thead>
@@ -165,8 +229,8 @@ function show(v: unknown) {
             <div v-if="c.error ?? c.description" class="mt-0.5 truncate pl-4 text-xs text-zinc-500" :title="c.error ?? c.description">{{ c.error ?? c.description }}</div>
           </td>
           <td class="px-4 py-2.5"><ScopeBadge :source="c.source" /></td>
-          <td class="hidden truncate px-4 py-2.5 text-xs text-zinc-500 md:table-cell" :title="marketplaceOf(c)">
-            <span v-if="c.source.plugin">{{ marketplaceOf(c) }}</span>
+          <td class="hidden truncate px-4 py-2.5 text-xs text-zinc-500 md:table-cell" :title="fromDetail(c) || fromLabel(c)">
+            <span v-if="fromLabel(c)" :class="c.origin?.kind === 'untracked' && 'text-amber-700 dark:text-amber-400'">{{ fromLabel(c) }}</span>
             <span v-else class="text-zinc-300 dark:text-zinc-600">—</span>
           </td>
           <td v-if="kind !== 'agent'" class="tabular hidden px-4 py-2.5 text-right text-zinc-500 sm:table-cell">
@@ -186,6 +250,7 @@ function show(v: unknown) {
       </Field>
       <Field label="Source"><ScopeBadge :source="selected.source" /></Field>
       <Field v-if="selected.source.plugin" label="Marketplace">{{ marketplaceOf(selected) }}</Field>
+      <Field v-if="selected.origin" label="Origin">{{ fromDetail(selected) }}</Field>
       <Field v-if="toggle" label="Change"><FixButton :fix="toggle" /></Field>
       <Field v-if="selected.description" label="Description">{{ selected.description }}</Field>
       <Field v-if="selected.usage" label="Used">{{ selected.usage.count }} times, last {{ relativeTime(selected.usage.lastUsed) }}</Field>

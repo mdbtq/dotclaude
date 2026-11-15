@@ -57,10 +57,13 @@ type Component struct {
 	FrontmatterError string         `json:"frontmatterError,omitempty"`
 	// Error is set when the definition could not be read at all, e.g. a
 	// skill directory that is a dangling symlink.
-	Error      string `json:"error,omitempty"`
-	Usage      *Usage `json:"usage,omitempty"`
-	Status     Status `json:"status"`
-	StatusNote string `json:"statusNote,omitempty"`
+	Error string `json:"error,omitempty"`
+	// Origin says how a user or project skill got there; nil for agents,
+	// commands, and plugin and managed skills.
+	Origin     *Origin `json:"origin,omitempty"`
+	Usage      *Usage  `json:"usage,omitempty"`
+	Status     Status  `json:"status"`
+	StatusNote string  `json:"statusNote,omitempty"`
 }
 
 // scanAgents reads every agent definition under dir, recursively. Outside a

@@ -10,11 +10,14 @@ what it can:
 - **What is in effect here, and where does each piece come from?** Pick a
   project and see the instruction files in load order, the merged settings
   with the file each value comes from, and which agents, skills and MCP
-  servers are active, shadowed by another definition, or switched off.
+  servers are active, shadowed by another definition, or switched off. Each
+  skill outside a plugin shows whether [skills.sh](https://skills.sh)
+  installed it and from which repository, whether it is a symlink to a
+  directory elsewhere, or whether it lives in the skills directory itself.
 - **What is broken or redundant?** Dangling symlinks, imports that resolve to
   nothing, memories missing from `MEMORY.md`, skills competing for the same
-  trigger, plugins that are enabled but not installed, hooks that run a
-  script that is gone.
+  trigger, skills that skills.sh installed but no longer tracks, plugins that
+  are enabled but not installed, hooks that run a script that is gone.
 - **How does memory hang together?** A graph of the `[[links]]` between
   memories, including the ones that point at a memory not written yet.
 - **Can it be fixed from here?** Switch a skill off or back on, enable or
@@ -77,6 +80,16 @@ The rules follow the Claude Code documentation at
   skill beats a command with the same name. `skillOverrides: "off"` switches
   one off. Plugin components are namespaced as `plugin:name`.
 - **MCP servers**: managed > local > project > user.
+- **Skill origin** (not a Claude Code rule, but how skills.sh installs):
+  skills.sh keeps each skill in a store and symlinks or copies it into
+  `skills/`, recording the source repository in a lock file. Globally that is
+  `~/.agents/skills` with `~/.agents/.skill-lock.json`, or
+  `$XDG_STATE_HOME/skills/.skill-lock.json` when that variable is set; for a
+  project, `.agents/skills` with `skills-lock.json` in the directory that
+  holds the `.claude` directory. A skill listed in the lock file counts as
+  installed by skills.sh. One that is in the store, or a directory with the
+  same name as a store entry, without a lock entry is reported as untracked:
+  `npx skills update` and `npx skills remove` do not see it.
 
 ## Changes
 

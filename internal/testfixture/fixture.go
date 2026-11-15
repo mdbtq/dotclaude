@@ -53,9 +53,17 @@ func New(t *testing.T) Fixture {
 		".claude/skills/release/SKILL.md":        "---\ndescription: Deploy the application to production servers quickly\n---\n",
 		".claude/commands/deploy.md":             "---\ndescription: Old deploy command\n---\n",
 		".claude/commands/frontend/component.md": "Make a component.\n",
-		".claude/memory/MEMORY.md":               "# Memory\n\n- [Alpha](alpha.md) — first\n- [Gone](gone.md) — deleted\n",
-		".claude/memory/alpha.md":                "---\nname: alpha\ndescription: First memory: with a colon\nmetadata:\n  type: feedback\n---\nLinks to [[beta]] and [[not-yet]].\n",
-		".claude/memory/beta.md":                 "---\nname: beta\ndescription: Second memory\nmetadata:\n  type: user\n---\nBack to [[alpha]].\n",
+		// skills.sh: a store, a lock file listing one of its skills, and a
+		// skill developed in a repository.
+		".agents/.skill-lock.json":        `{"version": 3, "skills": {"tracked": {"source": "owner/skills", "sourceType": "github"}}}`,
+		".agents/skills/tracked/SKILL.md": "---\ndescription: Installed and tracked by skills.sh\n---\n",
+		".agents/skills/orphan/SKILL.md":  "---\ndescription: In the store but missing from the lock\n---\n",
+		".agents/skills/copied/SKILL.md":  "---\ndescription: Store original of a copy\n---\n",
+		".claude/skills/copied/SKILL.md":  "---\ndescription: Copied out of the store\n---\n",
+		"code/dev-skill/SKILL.md":         "---\ndescription: Work in progress\n---\n",
+		".claude/memory/MEMORY.md":        "# Memory\n\n- [Alpha](alpha.md) — first\n- [Gone](gone.md) — deleted\n",
+		".claude/memory/alpha.md":         "---\nname: alpha\ndescription: First memory: with a colon\nmetadata:\n  type: feedback\n---\nLinks to [[beta]] and [[not-yet]].\n",
+		".claude/memory/beta.md":          "---\nname: beta\ndescription: Second memory\nmetadata:\n  type: user\n---\nBack to [[alpha]].\n",
 		".claude.json": `{
 			"oauthAccount": {"emailAddress": "` + Secret + `"},
 			"mcpServers": {
@@ -78,19 +86,21 @@ func New(t *testing.T) Fixture {
 		pluginRel(home, plugin, ".mcp.json"):                  `{"mcpServers": {"example-docs": {"type": "http", "url": "https://docs.example.com/mcp"}}}`,
 
 		// Project.
-		"code/CLAUDE.md":                              "# Code\n",
-		"code/repo/.git/HEAD":                         "ref: refs/heads/main\n",
-		"code/repo/CLAUDE.md":                         "# Repo\n",
-		"code/repo/.mcp.json":                         `{"mcpServers": {"shared": {"command": "project-shared"}, "team": {"command": "team-server"}}}`,
-		"code/repo/.claude/settings.json":             `{"model": "opus"}`,
-		"code/repo/.claude/settings.local.json":       `{"model": "haiku"}`,
-		"code/repo/app/.claude/settings.json":         `{"model": "sonnet-project", "permissions": {"allow": ["Bash(make *)"]}}`,
-		"code/repo/.claude/agents/reviewer.md":        "---\nname: reviewer\ndescription: Project reviewer\n---\n",
-		"code/repo/.claude/skills/deploy/SKILL.md":    "---\nname: deploy\ndescription: Project deploy\n---\n",
-		"code/repo/app/CLAUDE.local.md":               "Local notes.\n",
-		"code/repo/app/.claude/rules/api.md":          "---\npaths:\n  - \"src/api/**\"\n---\nAPI rules.\n",
-		"code/repo/app/.claude/settings.local.json":   `{"model": "legacy", "permissions": {"allow": ["Bash(git status)"]}}`,
-		"code/repo/app/.claude/commands/local-cmd.md": "Local command.\n",
+		"code/CLAUDE.md":                                     "# Code\n",
+		"code/repo/.git/HEAD":                                "ref: refs/heads/main\n",
+		"code/repo/CLAUDE.md":                                "# Repo\n",
+		"code/repo/.mcp.json":                                `{"mcpServers": {"shared": {"command": "project-shared"}, "team": {"command": "team-server"}}}`,
+		"code/repo/.claude/settings.json":                    `{"model": "opus"}`,
+		"code/repo/.claude/settings.local.json":              `{"model": "haiku"}`,
+		"code/repo/app/.claude/settings.json":                `{"model": "sonnet-project", "permissions": {"allow": ["Bash(make *)"]}}`,
+		"code/repo/.claude/agents/reviewer.md":               "---\nname: reviewer\ndescription: Project reviewer\n---\n",
+		"code/repo/.claude/skills/deploy/SKILL.md":           "---\nname: deploy\ndescription: Project deploy\n---\n",
+		"code/repo/app/CLAUDE.local.md":                      "Local notes.\n",
+		"code/repo/app/.claude/rules/api.md":                 "---\npaths:\n  - \"src/api/**\"\n---\nAPI rules.\n",
+		"code/repo/app/.claude/settings.local.json":          `{"model": "legacy", "permissions": {"allow": ["Bash(git status)"]}}`,
+		"code/repo/app/.claude/commands/local-cmd.md":        "Local command.\n",
+		"code/repo/app/skills-lock.json":                     `{"version": 1, "skills": {"project-tool": {"source": "owner/project-skills"}}}`,
+		"code/repo/app/.agents/skills/project-tool/SKILL.md": "---\ndescription: Installed into the project by skills.sh\n---\n",
 	}
 	for rel, content := range files {
 		path := filepath.Join(home, rel)
@@ -104,12 +114,27 @@ func New(t *testing.T) Fixture {
 			t.Fatal(err)
 		}
 	}
-	if err := os.Symlink(filepath.Join(home, "nowhere"), filepath.Join(cfg, "skills", "dangling")); err != nil {
+	links := map[string]string{
+		"dangling": filepath.Join(home, "nowhere"),
+		"tracked":  "../../.agents/skills/tracked",
+		"orphan":   "../../.agents/skills/orphan",
+		"dev":      filepath.Join(home, "code", "dev-skill"),
+	}
+	for name, target := range links {
+		if err := os.Symlink(target, filepath.Join(cfg, "skills", name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(project, ".claude", "skills"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../../.agents/skills/project-tool", filepath.Join(project, ".claude", "skills", "project-tool")); err != nil {
 		t.Fatal(err)
 	}
 
 	p := claude.DefaultPaths(home, "")
-	p.ManagedDir = filepath.Join(home, "managed") // never the real one
+	p.ManagedDir = filepath.Join(home, "managed")                     // never the real one
+	p.SkillsLock = filepath.Join(home, ".agents", ".skill-lock.json") // whatever XDG_STATE_HOME says
 	return Fixture{Home: home, Paths: p, Repo: repo, Project: project}
 }
 

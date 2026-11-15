@@ -195,3 +195,43 @@ func TestLenientFrontmatter(t *testing.T) {
 		t.Errorf("lenient parse: %+v body %q", doc.Frontmatter, doc.Body)
 	}
 }
+
+func TestSkillOrigins(t *testing.T) {
+	f := testfixture.New(t)
+	c, err := claude.Load(f.Paths, f.Project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := filepath.Join(f.Home, ".agents", "skills")
+	cases := []struct {
+		name  string
+		scope claude.Scope
+		want  claude.Origin
+	}{
+		{"tracked", claude.ScopeUser, claude.Origin{Kind: claude.OriginSkillsSh, Source: "owner/skills"}},
+		{"orphan", claude.ScopeUser, claude.Origin{Kind: claude.OriginUntracked, Target: filepath.Join(store, "orphan")}},
+		{"copied", claude.ScopeUser, claude.Origin{Kind: claude.OriginUntracked, Target: filepath.Join(store, "copied")}},
+		{"dev", claude.ScopeUser, claude.Origin{Kind: claude.OriginLink, Target: filepath.Join(f.Home, "code", "dev-skill")}},
+		{"deploy", claude.ScopeUser, claude.Origin{Kind: claude.OriginLocal}},
+		{"project-tool", claude.ScopeProject, claude.Origin{Kind: claude.OriginSkillsSh, Source: "owner/project-skills"}},
+	}
+	for _, tc := range cases {
+		got := find(t, c, claude.KindSkill, tc.name, tc.scope).Origin
+		if got == nil {
+			t.Errorf("%s: no origin", tc.name)
+			continue
+		}
+		// The temp dir may sit behind a symlink (/var → /private/var on macOS).
+		if tc.want.Target != "" {
+			if resolved, err := filepath.EvalSymlinks(tc.want.Target); err == nil && got.Target == resolved {
+				tc.want.Target = resolved
+			}
+		}
+		if *got != tc.want {
+			t.Errorf("%s: origin %+v, want %+v", tc.name, *got, tc.want)
+		}
+	}
+	if got := find(t, c, claude.KindSkill, "example:lint", claude.ScopePlugin).Origin; got != nil {
+		t.Errorf("plugin skill has origin %+v, want none", *got)
+	}
+}

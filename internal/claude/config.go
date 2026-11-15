@@ -112,13 +112,17 @@ func Load(p Paths, projectDir string) (*Config, error) {
 	// Components.
 	user := Source{Scope: ScopeUser}
 	c.Components = append(c.Components, scanAgents(filepath.Join(p.ConfigDir, "agents"), user, "")...)
-	c.Components = append(c.Components, scanSkills(filepath.Join(p.ConfigDir, "skills"), user, "")...)
+	userSkills := scanSkills(filepath.Join(p.ConfigDir, "skills"), user, "")
+	setOrigins(userSkills, readSkillsStore(p.SkillsStore, p.SkillsLock))
+	c.Components = append(c.Components, userSkills...)
 	c.Components = append(c.Components, scanCommands(filepath.Join(p.ConfigDir, "commands"), user, "")...)
 	c.Components = append(c.Components, scanSkills(filepath.Join(p.ManagedDir, ".claude", "skills"), Source{Scope: ScopeManaged}, "")...)
 	project := Source{Scope: ScopeProject}
 	for _, dir := range projectClaudeDirs {
 		c.Components = append(c.Components, scanAgents(filepath.Join(dir, "agents"), project, "")...)
-		c.Components = append(c.Components, scanSkills(filepath.Join(dir, "skills"), project, "")...)
+		projectSkills := scanSkills(filepath.Join(dir, "skills"), project, "")
+		setOrigins(projectSkills, projectSkillsStore(dir))
+		c.Components = append(c.Components, projectSkills...)
 		c.Components = append(c.Components, scanCommands(filepath.Join(dir, "commands"), project, "")...)
 	}
 	for _, pc := range contents {

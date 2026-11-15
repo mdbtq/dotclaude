@@ -25,6 +25,13 @@ type Paths struct {
 	// MemoryDirs are extra memory directories to show next to the per-project
 	// auto memory, e.g. a global memory directory a hook loads.
 	MemoryDirs []string
+	// SkillsStore is where skills.sh keeps globally installed skills,
+	// ~/.agents/skills by default.
+	SkillsStore string
+	// SkillsLock is skills.sh's global lock file:
+	// $XDG_STATE_HOME/skills/.skill-lock.json when that variable is set,
+	// else ~/.agents/.skill-lock.json.
+	SkillsLock string
 }
 
 // DefaultPaths returns the standard locations for the given home directory
@@ -40,6 +47,11 @@ func DefaultPaths(home, configDir string) Paths {
 		ConfigDir:    configDir,
 		GlobalConfig: filepath.Join(home, ".claude.json"),
 		ManagedDir:   "/Library/Application Support/ClaudeCode",
+		SkillsStore:  filepath.Join(home, ".agents", "skills"),
+		SkillsLock:   filepath.Join(home, ".agents", ".skill-lock.json"),
+	}
+	if state := os.Getenv("XDG_STATE_HOME"); state != "" {
+		p.SkillsLock = filepath.Join(state, "skills", ".skill-lock.json")
 	}
 	if isDir(filepath.Join(p.ConfigDir, "memory")) {
 		p.MemoryDirs = []string{filepath.Join(p.ConfigDir, "memory")}

@@ -70,6 +70,16 @@ func TestUserLevel(t *testing.T) {
 		t.Errorf("example plugin: %+v", example)
 	}
 
+	if got := len(c.Marketplaces); got != 2 {
+		t.Fatalf("marketplaces: %d, want market and spare", got)
+	}
+	if m := c.Marketplaces[0]; m.Name != "market" || !m.Known || m.Location != "https://git.example.com/market.git" || m.Owner != "Owner" || m.Listed != 2 || !m.AutoUpdate {
+		t.Errorf("marketplace market: %+v", m)
+	}
+	if m := c.Marketplaces[1]; m.Name != "spare" || m.Location != "owner/spare" || m.Description != "Nothing installed from here" || m.Error != "" {
+		t.Errorf("marketplace spare: %+v", m)
+	}
+
 	if env, ok := setting(c, "env.API_TOKEN"); !ok || env.Value != claude.Redacted {
 		t.Errorf("env.API_TOKEN: %+v, want redacted", env)
 	}

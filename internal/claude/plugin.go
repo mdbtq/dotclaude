@@ -200,25 +200,12 @@ func readPlugin(p *Plugin) pluginContents {
 // plugin cache. It returns "" unless the marketplace lists the plugin with a
 // relative source directory that exists.
 func marketplacePluginDir(configDir, market, name string) string {
-	var known map[string]struct {
-		InstallLocation string `json:"installLocation"`
-	}
-	data, err := os.ReadFile(filepath.Join(configDir, "plugins", "known_marketplaces.json"))
-	if err != nil || json.Unmarshal(data, &known) != nil {
-		return ""
-	}
-	loc := known[market].InstallLocation
+	loc := readKnownMarketplaces(configDir)[market].InstallLocation
 	if loc == "" {
 		return ""
 	}
-	var manifest struct {
-		Plugins []struct {
-			Name   string          `json:"name"`
-			Source json.RawMessage `json:"source"`
-		} `json:"plugins"`
-	}
-	data, err = os.ReadFile(filepath.Join(loc, ".claude-plugin", "marketplace.json"))
-	if err != nil || json.Unmarshal(data, &manifest) != nil {
+	manifest, err := readMarketplaceManifest(loc)
+	if err != nil {
 		return ""
 	}
 	for _, pl := range manifest.Plugins {

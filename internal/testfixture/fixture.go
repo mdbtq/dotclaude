@@ -85,6 +85,15 @@ func New(t *testing.T) Fixture {
 		pluginRel(home, plugin, "hooks/stop.sh"):              "#!/bin/sh\n",
 		pluginRel(home, plugin, ".mcp.json"):                  `{"mcpServers": {"example-docs": {"type": "http", "url": "https://docs.example.com/mcp"}}}`,
 
+		// Marketplaces: the one the plugins come from, with credentials in its
+		// URL, and one with no plugins installed from it.
+		".claude/plugins/known_marketplaces.json": `{
+			"market": {"source": {"source": "git", "url": "https://user:` + Secret + `@git.example.com/market.git?token=` + Secret + `"}, "installLocation": "` + filepath.Join(cfg, "plugins", "marketplaces", "market") + `", "lastUpdated": "2026-01-02T03:04:05.000Z", "autoUpdate": true},
+			"spare": {"source": {"source": "github", "repo": "owner/spare"}, "installLocation": "` + filepath.Join(cfg, "plugins", "marketplaces", "spare") + `"}
+		}`,
+		".claude/plugins/marketplaces/market/.claude-plugin/marketplace.json": `{"name": "market", "description": "A test marketplace", "owner": {"name": "Owner"}, "plugins": [{"name": "example", "source": "./plugins/example"}, {"name": "other", "source": "./plugins/other"}]}`,
+		".claude/plugins/marketplaces/spare/.claude-plugin/marketplace.json":  `{"name": "spare", "metadata": {"description": "Nothing installed from here"}, "plugins": []}`,
+
 		// Project.
 		"code/CLAUDE.md":                                     "# Code\n",
 		"code/repo/.git/HEAD":                                "ref: refs/heads/main\n",

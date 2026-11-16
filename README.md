@@ -14,6 +14,8 @@ what it can:
   skill outside a plugin shows whether [skills.sh](https://skills.sh)
   installed it and from which repository, whether it is a symlink to a
   directory elsewhere, or whether it lives in the skills directory itself.
+  Each plugin marketplace has its own page, with the agents, skills,
+  commands, hooks and MCP servers grouped by the plugin that adds them.
 - **What is broken or redundant?** Dangling symlinks, imports that resolve to
   nothing, memories missing from `MEMORY.md`, skills competing for the same
   trigger, skills that skills.sh installed but no longer tracks, plugins that

@@ -23,6 +23,7 @@ type Config struct {
 	Instructions   []Instruction   `json:"instructions"`
 	Components     []Component     `json:"components"`
 	Plugins        []Plugin        `json:"plugins"`
+	Marketplaces   []Marketplace   `json:"marketplaces"`
 	Hooks          []Hook          `json:"hooks"`
 	MCPServers     []MCPServer     `json:"mcpServers"`
 	Memory         []MemoryStore   `json:"memory"`
@@ -108,6 +109,7 @@ func Load(p Paths, projectDir string) (*Config, error) {
 		plugins[i].EnabledIn = enabledIn[plugins[i].ID]
 	}
 	c.Plugins = plugins
+	c.Marketplaces = loadMarketplaces(p.ConfigDir, plugins)
 
 	// Components.
 	user := Source{Scope: ScopeUser}
@@ -188,6 +190,9 @@ func (c *Config) nonNil() {
 	}
 	if c.Plugins == nil {
 		c.Plugins = []Plugin{}
+	}
+	if c.Marketplaces == nil {
+		c.Marketplaces = []Marketplace{}
 	}
 	if c.Hooks == nil {
 		c.Hooks = []Hook{}

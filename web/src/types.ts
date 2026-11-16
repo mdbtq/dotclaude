@@ -58,6 +58,20 @@ export interface Plugin {
   error?: string
 }
 
+export interface Marketplace {
+  name: string
+  source?: string
+  location?: string
+  installLocation?: string
+  lastUpdated?: string
+  autoUpdate?: boolean
+  description?: string
+  owner?: string
+  listed: number
+  known: boolean
+  error?: string
+}
+
 export interface Hook {
   event: string
   matcher?: string
@@ -151,6 +165,7 @@ export interface Config {
   instructions: Instruction[]
   components: Component[]
   plugins: Plugin[] | null
+  marketplaces: Marketplace[] | null
   hooks: Hook[] | null
   mcpServers: MCPServer[] | null
   memory: MemoryStore[] | null

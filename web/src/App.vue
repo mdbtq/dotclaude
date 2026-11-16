@@ -26,6 +26,7 @@ const nav = computed(() => {
     { to: '/skills', label: 'Skills', count: count('skill') },
     { to: '/commands', label: 'Commands', count: count('command') },
     { to: '/plugins', label: 'Plugins', count: c?.plugins?.filter((p) => p.enabled).length },
+    { to: '/marketplaces', label: 'Marketplaces', count: c?.marketplaces?.length },
     { to: '/hooks', label: 'Hooks', count: c?.hooks?.filter((h) => h.status === 'active').length },
     { to: '/mcp', label: 'MCP servers', count: c?.mcpServers?.filter((s) => s.status === 'active').length },
     { section: 'Knowledge' },
@@ -64,6 +65,7 @@ function selectProject(p: string) {
             v-else
             :to="linkTo(item.to!)"
             class="flex items-center justify-between rounded-md px-2 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            :class="route.path.startsWith(item.to + '/') && '!bg-zinc-100 !text-zinc-900 font-medium dark:!bg-zinc-800 dark:!text-zinc-100'"
             exact-active-class="!bg-zinc-100 !text-zinc-900 font-medium dark:!bg-zinc-800 dark:!text-zinc-100"
           >
             <span>{{ item.label }}</span>

@@ -82,6 +82,10 @@ The rules follow the Claude Code documentation at
   skill beats a command with the same name. `skillOverrides: "off"` switches
   one off. Plugin components are namespaced as `plugin:name`.
 - **MCP servers**: managed > local > project > user.
+- **Marketplaces**: the ones in `<config-dir>/plugins/known_marketplaces.json`,
+  described by the `.claude-plugin/marketplace.json` in each checkout. A
+  marketplace that an installed or enabled plugin names but that file does not
+  list is shown with an error.
 - **Skill origin** (not a Claude Code rule, but how skills.sh installs):
   skills.sh keeps each skill in a store and symlinks or copies it into
   `skills/`, recording the source repository in a lock file. Globally that is
@@ -134,7 +138,9 @@ level or a project listed in `~/.claude.json`. `--read-only` turns changes off.
 The file viewer serves only files that are part of the loaded configuration,
 and never settings files. The account details in `~/.claude.json` are never
 decoded. MCP arguments, environment and headers are not read at all, and
-settings values under `env` or with credential-like names are redacted.
+settings values under `env` or with credential-like names are redacted. URLs
+of HTTP MCP servers and marketplaces are shown without credentials, query or
+fragment.
 
 ## Develop
 
@@ -142,7 +148,7 @@ settings values under `env` or with credential-like names are redacted.
 make dev/serve    # API on :7878
 make dev/web      # UI with hot reload on :5173, proxying /api
 make qa/check     # formatting, vet, type-check, tests
-make help         # every target
+make              # every target (the same as make help)
 ```
 
 Tests run against a synthetic configuration built by `internal/testfixture`,

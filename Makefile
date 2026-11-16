@@ -10,7 +10,7 @@ LDFLAGS     := -s -w -X main.version=$(VERSION)
 # Platforms built by `make build/release`.
 PLATFORMS := darwin/arm64 darwin/amd64 linux/amd64 linux/arm64
 
-.DEFAULT_GOAL := build/binary
+.DEFAULT_GOAL := help
 
 .PHONY: help
 help: ## Show this help
